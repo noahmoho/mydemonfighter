@@ -14,6 +14,7 @@
   html,body{height:100%;}
   body{background:var(--bark-d);color:var(--parch);font-family:ui-monospace,'SF Mono',Menlo,monospace;
     overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:none;}
+  #skinCanvas{position:static !important;inset:auto !important;}
   canvas{display:block;width:100%;height:100%;image-rendering:pixelated;position:fixed;inset:0;}
   .panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:30;padding:1.1rem;overflow-y:auto;}
   .panel.hidden{display:none;}
@@ -21,16 +22,16 @@
   .card{background:linear-gradient(180deg,#34291c,#241c12);border:2px solid var(--line);max-width:600px;width:100%;
     padding:1.5rem;box-shadow:0 0 0 4px var(--bark-d),0 18px 50px rgba(0,0,0,0.7);position:relative;}
   .card::before{content:'';position:absolute;inset:6px;border:1px solid rgba(224,177,60,0.18);pointer-events:none;}
-  .card-wide{max-width:1040px;}
+  .card-wide{max-width:1340px;}
   #invPanel{padding:0.5rem;align-items:flex-start;padding-top:1.2rem;}
-  #invPanel .card{max-height:94vh;overflow-y:auto;padding:1.1rem 1.3rem;}
-  #invPanel .inv-grid{max-height:54vh;grid-template-columns:repeat(auto-fill,minmax(94px,1fr));gap:0.6rem;}
-  #invPanel .inv-cell canvas{width:60px;height:60px;}
-  #invPanel .inv-name{font-size:0.64rem;}
-  #invPanel #dollCanvas{width:230px;height:330px;}
-  #invPanel .doll-col{flex:0 0 240px;}
-  #invPanel .detail-box{min-height:96px;font-size:0.8rem;}
-  @media(min-width:760px){#invPanel .inv-side{min-width:420px;}}
+  #invPanel .card{max-height:94vh;overflow-y:auto;padding:1.4rem 1.7rem;min-height:80vh;}
+  #invPanel .inv-grid{max-height:64vh;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:0.7rem;}
+  #invPanel .inv-cell canvas{width:78px;height:78px;}
+  #invPanel .inv-name{font-size:0.72rem;}
+  #invPanel #dollCanvas{width:320px;height:460px;}
+  #invPanel .doll-col{flex:0 0 340px;}
+  #invPanel .detail-box{min-height:120px;font-size:0.88rem;}
+  @media(min-width:760px){#invPanel .inv-side{min-width:560px;}}
   h1{font-size:clamp(1.7rem,6vw,2.5rem);letter-spacing:-0.02em;line-height:1.02;text-shadow:2px 2px 0 var(--ink),0 0 18px rgba(224,177,60,0.25);}
   .crest{font-size:0.7rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--moss);margin-bottom:0.5rem;}
   h2{font-size:1.05rem;color:var(--gold);margin:0.1rem 0 0.7rem;}
@@ -197,6 +198,31 @@
   </div>
 </div>
 
+<div class="panel scrim" id="charSelect">
+  <div style="display:flex;gap:1.4rem;align-items:stretch;flex-wrap:wrap;justify-content:center;max-width:920px;width:100%;">
+    <div class="card" style="flex:0 0 300px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:0.8rem;padding:1.4rem;">
+      <canvas id="skinCanvas" width="200" height="300" style="position:static;inset:auto;width:200px;height:300px;flex:none;background:radial-gradient(circle at 50% 36%,#2d3a28,#14110c);border:2px solid var(--line);image-rendering:pixelated;"></canvas>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;">
+        <div id="skinName" style="color:var(--gold);font-weight:bold;font-size:1.25rem;text-align:center;"></div>
+        <div id="skinCounter" class="tiny" style="color:#8a7f5f;"></div>
+      </div>
+    </div>
+    <div class="card" style="flex:1 1 360px;min-width:320px;display:flex;flex-direction:column;justify-content:center;text-align:center;">
+      <div class="crest">Warrior of the Verdant Reach</div>
+      <h1 style="margin-bottom:0.3rem;">Choose Your Warrior</h1>
+      <p class="sub" style="margin-top:0.3rem;">Pick who marches into the Reach. Your choice is set for this run — return to camp anew to change it.</p>
+      <div id="skinLockNote" class="tiny" style="min-height:1.4em;text-align:center;margin:0.6rem 0;"></div>
+      <div class="btn-row" style="justify-content:center;gap:1.2rem;margin-bottom:0.8rem;">
+        <button class="mini alt" id="skinPrev" style="font-size:1.3rem;padding:0.35rem 1.3rem;">◀</button>
+        <button class="mini alt" id="skinNext" style="font-size:1.3rem;padding:0.35rem 1.3rem;">▶</button>
+      </div>
+      <div class="btn-row" style="justify-content:center;">
+        <button id="beginBtn">Begin the Journey</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="panel scrim hidden" id="logPanel">
   <div class="card">
     <div class="crest">Today's War-Log</div>
@@ -241,7 +267,7 @@
     <div id="gearView">
       <div class="inv-wrap">
         <div class="doll-col">
-          <canvas id="dollCanvas" width="170" height="240"></canvas>
+          <canvas id="dollCanvas" width="240" height="340"></canvas>
           <div class="doll-name" id="dollTitle">Bare Wanderer</div>
           <div class="doll-rot">
             <button class="mini alt" id="rotL">◀</button>
@@ -282,15 +308,68 @@
 /* ============ STORAGE + TRACKER ============ */
 const todayKey=()=>new Date().toISOString().slice(0,10);
 let tracker=null;
-async function loadTracker(){try{const r=await window.storage.get('tracker:v1',false);if(r&&r.value)tracker=JSON.parse(r.value);}catch(e){tracker=null;}}
-async function saveTracker(){if(!tracker)return;try{await window.storage.set('tracker:v1',JSON.stringify(tracker),false);}catch(e){}}
-let game={xp:0,level:1,loot:[],equip:{weapon:null,ranged:null,armor:null,helm:null,trinket:null},throwables:{dagger:3,bomb:2},bestStreak:0};
-async function loadGame(){try{const r=await window.storage.get('goalquest:v5',false);if(r&&r.value)game=Object.assign(game,JSON.parse(r.value));}catch(e){}
+// Storage shim: uses window.storage in claude.ai; falls back to localStorage when the file is
+// opened directly (file://), so progress persists across closing and reopening the HTML.
+const STORE={
+  async get(key){
+    try{if(typeof window!=='undefined'&&window.storage&&window.storage.get){const r=await window.storage.get(key,false);if(r&&r.value!=null)return r.value;}}catch(e){}
+    try{if(typeof localStorage!=='undefined'){const v=localStorage.getItem(key);if(v!=null)return v;}}catch(e){}
+    return null;
+  },
+  async set(key,val){
+    let ok=false;
+    try{if(typeof window!=='undefined'&&window.storage&&window.storage.set){await window.storage.set(key,val,false);ok=true;}}catch(e){}
+    try{if(typeof localStorage!=='undefined')localStorage.setItem(key,val);}catch(e){}
+    return ok;
+  }
+};
+async function loadTracker(){try{const v=await STORE.get('tracker:v1');if(v)tracker=JSON.parse(v);}catch(e){tracker=null;}}
+async function saveTracker(){if(!tracker)return;try{await STORE.set('tracker:v1',JSON.stringify(tracker));}catch(e){}}
+// ===== Character skins. unlock: 'start' | {level:N} | 'mythic' (alien, from loot) =====
+const SKINS=[
+  // ---- starters (always available) ----
+  {id:'wanderer', name:'Wanderer',     skin:'#caa46a', body:'#7a6a52', hair:'#3a2d1d', unlock:'start', feat:{belt:'#3a2d1d',buckle:'#c8a030',emblem:'stripe',accent:'#5a4a36'}},
+  {id:'ranger',   name:'Forest Ranger',skin:'#b89066', body:'#46603a', hair:'#2a1d12', unlock:'start', feat:{hair:'long',sash:1,accent:'#2e4226',belt:'#2a1d12',bracers:1,emblem:'cross'}},
+  {id:'ash',      name:'Ashblood',     skin:'#9a7a5a', body:'#5a4636', hair:'#1a1410', unlock:'start', feat:{hair:'mohawk',faceMark:'warpaint',markCol:'#8a3020',accent:'#3a2a1e',pads:1}},
+  {id:'pale',     name:'Pale Nomad',   skin:'#e0c4a0', body:'#6a6a72', hair:'#d8ccb0', unlock:'start', feat:{hair:'flow',accent:'#4a4a52',belt:'#4a4a52',emblem:'diamond'}},
+  // ---- level-gated (now much harder) ----
+  {id:'umber',    name:'Umber Scout',  skin:'#8a6a48', body:'#4a3a2a', hair:'#2a1a10', unlock:{level:4}, feat:{hair:'topknot',bracers:1,belt:'#2a1a10',buckle:'#a0782a',emblem:'stripe',accent:'#6a5232'}},
+  {id:'frost',    name:'Frostborn',    skin:'#cfdbe4', body:'#5a7080', hair:'#9fb6c4', unlock:{level:7}, feat:{hair:'long',horns:1,hornCol:'#dce8ef',accent:'#7a9aac',faceMark:'dots',markCol:'#aef0ff',pads:1}},
+  {id:'ember',    name:'Emberkin',     skin:'#d8956a', body:'#7a3a2a', hair:'#c85838', unlock:{level:10}, feat:{hair:'mohawk',faceMark:'warpaint',markCol:'#ff6020',accent:'#c84020',emblem:'cross',bracers:1}},
+  {id:'verdant',  name:'Verdant Knight',skin:'#a8c88a', body:'#3a6630', hair:'#2a4a20', unlock:{level:14}, feat:{pads:1,emblem:'cross',accent:'#5a8a3a',belt:'#2a4a20',buckle:'#c8d060',bracers:1}},
+  {id:'shadow',   name:'Shadowclad',   skin:'#9a8a7a', body:'#2a2630', hair:'#1a1620', unlock:{level:18}, feat:{hair:'flow',sash:1,accent:'#4a3a5a',faceMark:'warpaint',markCol:'#6a4a8a',pads:1}},
+  {id:'golden',   name:'Goldhand',     skin:'#e8c878', body:'#8a6a28', hair:'#c8a030', unlock:{level:22}, feat:{crown:1,crownCol:'#ffd860',emblem:'diamond',accent:'#ffe080',belt:'#6a5018',buckle:'#ffd860',pads:1}},
+  {id:'ironclad', name:'Ironclad',     skin:'#b0a890', body:'#5a6470', hair:'#3a4048', unlock:{level:26}, feat:{hair:'bald',pads:1,emblem:'scales',accent:'#8a94a0',bracers:1,belt:'#3a4048'}},
+  {id:'bloodoak', name:'Bloodoak',     skin:'#b07858', body:'#6a2418', hair:'#3a1810', unlock:{level:30}, feat:{hair:'mohawk',horns:1,hornCol:'#3a1810',faceMark:'warpaint',markCol:'#ff3020',accent:'#a03020',pads:1}},
+  {id:'tidecaller',name:'Tidecaller',  skin:'#9ac0c8', body:'#2a5a6a', hair:'#5aa0b0', unlock:{level:35}, feat:{hair:'long',emblem:'runes',accent:'#5ac0d0',faceMark:'dots',markCol:'#aef0ff',sash:1}},
+  {id:'sunfire',  name:'Sunfire Adept', skin:'#f0c878', body:'#c87828', hair:'#ffd860', unlock:{level:40}, feat:{hair:'flow',crown:1,crownCol:'#ffe060',emblem:'runes',accent:'#ffb030',faceMark:'warpaint',markCol:'#ff8020'}},
+  {id:'mossheart',name:'Mossheart',    skin:'#a0b878', body:'#3a5028', hair:'#6a8a3a', unlock:{level:46}, feat:{hair:'long',horns:1,hornCol:'#6a8a3a',emblem:'scales',accent:'#7aa83a',pads:1,sash:1}},
+  {id:'obsidian', name:'Obsidian Lord',skin:'#8a8290', body:'#1a1620', hair:'#4a4458', unlock:{level:52}, feat:{hair:'flow',crown:1,crownCol:'#8a7aa8',emblem:'diamond',accent:'#5a4a7a',pads:1,faceMark:'warpaint',markCol:'#7a5aa0'}},
+  {id:'auric',    name:'Auric Sovereign',skin:'#f0d890', body:'#a07818', hair:'#fff0a0', unlock:{level:60}, feat:{hair:'flow',crown:1,crownCol:'#fff0a0',emblem:'runes',accent:'#ffe890',pads:1,sash:1,bracers:1,buckle:'#fff0a0',belt:'#7a5810'}},
+  // ---- mythic alien skins (rare loot drops only) ----
+  {id:'void',     name:'Void Drifter',  skin:'#6a4a8a', body:'#2a1a4a', hair:'#b06fd0', unlock:'mythic', alien:true, glow:'#b06fd0', feat:{hair:'bald',antenna:1,emblem:'runes',glowEmblem:1,faceMark:'visor',eyes:'wide',accent:'#8a5ac0'}},
+  {id:'starborn', name:'Starborn',      skin:'#7ad0c8', body:'#1a3a4a', hair:'#aef0e8', unlock:'mythic', alien:true, glow:'#7af0e8', feat:{hair:'flow',antenna:1,emblem:'runes',glowEmblem:1,faceMark:'dots',markCol:'#aef0ff',eyes:'wide',accent:'#5ac0d0'}},
+  {id:'crimson',  name:'Crimson Xeno',  skin:'#c85a6a', body:'#4a1020', hair:'#ff6a8a', unlock:'mythic', alien:true, glow:'#ff5a7a', feat:{hair:'bald',horns:1,hornCol:'#ff5a7a',emblem:'runes',glowEmblem:1,faceMark:'visor',eyes:'wide',accent:'#c83050'}},
+  {id:'chlorite', name:'Chlorite Hunter',skin:'#8ad06a', body:'#1a4a1a', hair:'#aaff7a', unlock:'mythic', alien:true, glow:'#7aff5a', feat:{hair:'mohawk',antenna:1,emblem:'scales',glowEmblem:1,faceMark:'dots',markCol:'#aaff7a',eyes:'wide',accent:'#5ac030'}},
+  {id:'nebula',   name:'Nebula Warden', skin:'#b07ad0', body:'#2a1a5a', hair:'#e0a0ff', unlock:'mythic', alien:true, glow:'#d080ff', feat:{hair:'flow',crown:1,crownCol:'#e0a0ff',emblem:'runes',glowEmblem:1,faceMark:'dots',markCol:'#e0a0ff',eyes:'wide',accent:'#9a5ad0',pads:1}},
+  {id:'molten',   name:'Molten Outsider',skin:'#f0905a', body:'#5a1808', hair:'#ffb020', unlock:'mythic', alien:true, glow:'#ff8020', feat:{hair:'mohawk',horns:1,hornCol:'#ff8020',emblem:'runes',glowEmblem:1,faceMark:'warpaint',markCol:'#ff6020',eyes:'wide',accent:'#ff7020'}},
+];
+function skinById(id){return SKINS.find(s=>s.id===id)||SKINS[0];}
+function skinUnlocked(s){
+  if(s.unlock==='start')return true;
+  if(s.unlock==='mythic')return (game.skinsUnlocked||[]).includes(s.id);
+  if(s.unlock&&s.unlock.level)return game.level>=s.unlock.level;
+  return false;
+}
+let game={xp:0,level:1,loot:[],equip:{weapon:null,ranged:null,armor:null,helm:null,trinket:null},throwables:{dagger:3,bomb:2},bestStreak:0,skin:'wanderer',skinsUnlocked:[]};
+async function loadGame(){try{const v=await STORE.get('goalquest:v5');if(v)game=Object.assign(game,JSON.parse(v));}catch(e){}
   if(!game.equip)game.equip={weapon:null,ranged:null,armor:null,helm:null,trinket:null};
   if(game.equip.trinket===undefined)game.equip.trinket=null;
   if(game.equip.ranged===undefined)game.equip.ranged=null;
-  if(!game.throwables)game.throwables={dagger:3,bomb:2};}
-async function saveGame(){try{await window.storage.set('goalquest:v5',JSON.stringify(game),false);}catch(e){}}
+  if(!game.throwables)game.throwables={dagger:3,bomb:2};
+  if(!game.skin)game.skin='wanderer';
+  if(!game.skinsUnlocked)game.skinsUnlocked=[];}
+async function saveGame(){try{await STORE.set('goalquest:v5',JSON.stringify(game));}catch(e){}}
 
 function ensureTracker(){
   if(!tracker)tracker={items:{fitness:[],money:[],habits:[]},money:{cap:'',spent:''},checks:{},streakDates:[]};
@@ -305,24 +384,47 @@ function logScore(){let total=0,done=0;const checks=(tracker&&tracker.checks&&tr
   if(tracker&&tracker.items)for(const key of Object.keys(tracker.items))tracker.items[key].forEach((it,i)=>{total++;if(checks[key+':'+i])done++;});
   return{done,total,pct:total?done/total:0};}
 function streakCount(){if(!tracker||!tracker.streakDates)return 0;let s=0,d=new Date();for(;;){const k=d.toISOString().slice(0,10);if(tracker.streakDates.includes(k)){s++;d.setDate(d.getDate()-1);}else break;}return s;}
+// 🥚 easter egg: a checked-off vow named exactly "becomemoho" (spaces/case ignored)
+function mohoVowChecked(){ensureTracker();const checks=tracker.checks[todayKey()]||{};
+  for(const key of Object.keys(tracker.items)){const arr=tracker.items[key];for(let i=0;i<arr.length;i++){
+    const nm=(arr[i].label||'').toLowerCase().replace(/\s+/g,'');
+    if(nm==='becomemoho'&&checks[key+':'+i])return true;}}
+  return false;}
 function recomputeStreak(){const k=todayKey();let td=0,dd=0;const checks=tracker.checks[k]||{};
   for(const cat of Object.keys(tracker.items))tracker.items[cat].forEach((it,i)=>{if(it.type==='do'){td++;if(checks[cat+':'+i])dd++;}});
   const idx=tracker.streakDates.indexOf(k),complete=td>0&&dd===td;
   if(complete&&idx===-1)tracker.streakDates.push(k);if(!complete&&idx!==-1)tracker.streakDates.splice(idx,1);}
 function tierFor(pct,streak){
   streak=streak||0;
-  // At full completion, daily streak unlocks deeper, deadlier tiers.
+  // At full completion, daily streak unlocks deeper, deadlier tiers across three biomes.
   if(pct>=1.0){
-    if(streak>=21)return{idx:7,name:'The Worldwound — NIGHTMARE',col:'#ff5a4a'};
-    if(streak>=14)return{idx:6,name:'Ashen Hollow',col:'#e0683c'};
-    if(streak>=7) return{idx:5,name:'Blighted Reach',col:'#c050b0'};
-    return{idx:4,name:'Heart of the Wood — APEX HUNT',col:'var(--gold)'};
+    if(streak>=7)return{idx:11,name:'The Sundered Throne — ABYSS',col:'#ff3a6a',biome:'volcanic'};
+    if(streak>=6)return{idx:10,name:'Magma Vault',col:'#ff6a2a',biome:'volcanic'};
+    if(streak>=5)return{idx:9, name:'Cinder Wastes',col:'#ff8a3a',biome:'volcanic'};
+    if(streak>=4)return{idx:8, name:'The Worldwound — NIGHTMARE',col:'#ff5a4a',biome:'volcanic'};
+    if(streak>=3)return{idx:7, name:'Ashen Hollow',col:'#e0683c',biome:'frostfell'};
+    if(streak>=2)return{idx:6, name:'Frozen Reach',col:'#7ac0e0',biome:'frostfell'};
+    if(streak>=1) return{idx:5, name:'Blighted Tundra',col:'#9ad0d8',biome:'frostfell'};
+    return{idx:4,name:'Heart of the Wood — APEX HUNT',col:'var(--gold)',biome:'forest'};
   }
-  if(pct>=0.75)return{idx:3,name:'Deep Thicket',col:'var(--purple)'};
-  if(pct>=0.5)return{idx:2,name:'Tangled Grove',col:'var(--blue)'};
-  if(pct>=0.25)return{idx:1,name:'Forest Edge',col:'var(--moss)'};
-  return{idx:0,name:'Sunlit Clearing',col:'#bdb59c'};
+  if(pct>=0.75)return{idx:3,name:'Deep Thicket',col:'var(--purple)',biome:'forest'};
+  if(pct>=0.5)return{idx:2,name:'Tangled Grove',col:'var(--blue)',biome:'forest'};
+  if(pct>=0.25)return{idx:1,name:'Forest Edge',col:'var(--moss)',biome:'forest'};
+  return{idx:0,name:'Sunlit Clearing',col:'#bdb59c',biome:'forest'};
 }
+// Biome palettes — sky gradient stops, ground stops, wall tones, tree tint, dapple, fog band.
+const BIOMES={
+  forest:{sky:['#2f4a68','#5d7a78','#9fac7e','#c4c08e'],ground:['#56612f','#454f28','#333b1f'],
+    wallA:'#52503e',wallB:'#45432f',wallMoss:'#6a7a4a',wallDark:'#33301f',mossStreak:'#5f7a3a',
+    dapple:'#4d5a2c',fogBand:'196,192,142',treeTint:1.0,sunBloom:'255,236,180',hazeA:'60,82,54',hazeB:'46,66,42'},
+  frostfell:{sky:['#1d2b4a','#3a5570','#8fb4c8','#dce8ef'],ground:['#5a6e7a','#48586a','#2f3a48'],
+    wallA:'#6a7682',wallB:'#586470',wallMoss:'#9fb6c4',wallDark:'#3a4450',mossStreak:'#b8d0dc',
+    dapple:'#6a7e8c',fogBand:'220,232,239',treeTint:0.72,sunBloom:'200,224,240',hazeA:'90,116,134',hazeB:'70,94,112'},
+  volcanic:{sky:['#2a1018','#5a2018','#8a3a1a','#c87038'],ground:['#3a2418','#2a1810','#180c08'],
+    wallA:'#4a2a24',wallB:'#3a2018',wallMoss:'#8a4030',wallDark:'#1a0c08',mossStreak:'#c85838',
+    dapple:'#6a3020',fogBand:'200,110,70',treeTint:0.5,sunBloom:'255,150,80',hazeA:'90,40,30',hazeB:'60,26,20'}
+};
+let curBiome='forest';
 
 /* ============ STAT SYSTEM ============ */
 // vit,dmg(melee),rdmg(ranged/throw),crit%,aspd%,mspd%,regen(hp/5s),dodge%,luck%,harvest%
@@ -338,7 +440,7 @@ function aggStats(){const t={};STAT_KEYS.forEach(k=>t[k]=0);
   t.vit+=game.level*8;t.dmg+=Math.floor(game.level*1.2);
   return t;}
 function derived(){const t=aggStats();return{
-  maxhp:100+t.vit, meleeBonus:t.dmg, throwBonus:t.rdmg,
+  maxhp:70+t.vit, meleeBonus:t.dmg, throwBonus:t.rdmg,
   crit:Math.min(0.75,0.05+t.crit/100), atkCD:Math.max(8,Math.round(20*(1-t.aspd/100))),
   moveMul:Math.max(0.5,1+t.mspd/100), regen:t.regen, dodge:Math.min(0.6,t.dodge/100),
   luck:t.luck, harvest:t.harvest };}
@@ -486,7 +588,26 @@ function drawLootIcon(cv,l){
     if(F==='sigil'){x.strokeStyle=C;x.lineWidth=p*1.2;x.beginPath();x.arc(p*8,p*8,p*4,0,7);x.stroke();x.fillStyle=C;x.beginPath();x.arc(p*8,p*8,p*1.5,0,7);x.fill();x.fillStyle=shade(C,1.4);x.fillRect(p*7.5,p*2,p,p*3);}
   }
   else if(F==='shortbow'||F==='longbow'){const span=F==='longbow'?p*12:p*9.5;const y0=(16*p-span)/2;x.strokeStyle=C;x.lineWidth=p*1.3;x.beginPath();x.moveTo(p*9,y0);x.quadraticCurveTo(p*3.5,p*8,p*9,y0+span);x.stroke();x.strokeStyle=shade(C,1.4);x.lineWidth=p*0.5;x.stroke();x.strokeStyle='#e8e0c8';x.lineWidth=p*0.4;x.beginPath();x.moveTo(p*9,y0);x.lineTo(p*9,y0+span);x.stroke();x.fillStyle='#caa46a';x.fillRect(p*8.6,p*7.5,p*0.8,p);}
-  else if(F==='crossbow'){x.fillStyle=shade(C,0.8);x.fillRect(p*3,p*7,p*10,p*2);x.strokeStyle=C;x.lineWidth=p*1.1;x.beginPath();x.arc(p*4,p*8,p*3,-1.1,1.1);x.stroke();x.beginPath();x.arc(p*4,p*8,p*3,Math.PI-1.1,Math.PI+1.1);x.stroke();x.fillStyle=shade(C,1.3);x.fillRect(p*7,p*8,p*5,p*0.7);x.fillStyle='#3a2d1d';x.fillRect(p*9,p*9,p*1.4,p*4);x.fillStyle='#e8e0c8';x.fillRect(p*11,p*7.3,p*3,p*0.6);}
+  else if(F==='crossbow'){
+    // top-down crossbow: horizontal stock, a vertical prod (bow arc) near the front, string, bolt
+    const midY=p*8;
+    // stock (front to back, horizontal)
+    x.fillStyle=shade('#5a4326',1.0);x.fillRect(p*4,midY-p*0.8,p*9,p*1.6);
+    x.fillStyle=shade('#5a4326',1.3);x.fillRect(p*4,midY-p*0.8,p*9,p*0.6);
+    // prod (the bow limbs) — vertical arc crossing the stock near the front
+    const prodX=p*5.5;
+    x.strokeStyle=C;x.lineWidth=p*1.3;x.lineCap='round';
+    x.beginPath();x.moveTo(prodX,p*2.5);x.quadraticCurveTo(prodX-p*1.6,midY,prodX,p*13.5);x.stroke();
+    x.strokeStyle=shade(C,1.4);x.lineWidth=p*0.5;
+    x.beginPath();x.moveTo(prodX,p*2.5);x.quadraticCurveTo(prodX-p*1.6,midY,prodX,p*13.5);x.stroke();
+    // string across the prod tips
+    x.strokeStyle='#e8e0c8';x.lineWidth=p*0.4;x.beginPath();x.moveTo(prodX,p*2.5);x.lineTo(p*9,midY);x.lineTo(prodX,p*13.5);x.stroke();
+    // bolt on the rail, pointing forward (left)
+    x.fillStyle='#d7ccae';x.fillRect(p*3,midY-p*0.35,p*7,p*0.7);
+    x.fillStyle='#dfe6ea';x.beginPath();x.moveTo(p*2.4,midY);x.lineTo(p*3.6,midY-p*1);x.lineTo(p*3.6,midY+p*1);x.closePath();x.fill();
+    // trigger nub under the stock at the back
+    x.fillStyle='#3a2d1d';x.fillRect(p*10.5,midY+p*0.8,p*1.4,p*2);
+  }
   else if(F==='bomb'){x.fillStyle='#2a2a2a';x.beginPath();x.arc(p*8,p*10,p*4.5,0,7);x.fill();x.fillStyle='#4a4a4a';x.beginPath();x.arc(p*6.5,p*8.5,p*1.5,0,7);x.fill();x.fillStyle='#7a5a2a';x.fillRect(p*8,p*3,p,p*3);x.fillStyle='#e0b13c';x.fillRect(p*8,p*2,p*1.5,p*1.5);}
 }
 function makeIcon(l,size){const cv=document.createElement('canvas');cv.width=size||42;cv.height=size||42;drawLootIcon(cv,l);return cv;}
@@ -534,7 +655,7 @@ function buildForest(density){map=[];for(let y=0;y<MAP_S;y++){const row=[];for(l
 }
 function treeBlocked(px,py){if(px<1.05||py<1.05||px>MAP_S-1.05||py>MAP_S-1.05)return true;
   for(const t of trees){if(Math.hypot(t.x-px,t.y-py)<t.r+0.22)return true;}return false;}
-const player={x:MAP_S/2,y:MAP_S/2,ang:0,hp:100,maxhp:100,cool:0,
+const player={x:MAP_S/2,y:MAP_S/2,ang:0,hp:70,maxhp:70,cool:0,
   combo:0,comboT:0,charging:false,chargeT:0,blocking:false,blockT:0,dodgeT:0,dodgeDx:0,dodgeDy:0,stamina:100,maxstam:100,regenAcc:0};
 let enemies=[],projectiles=[],thrown=[],pArrows=[],motes=[],particles=[],floaters=[],pickups=[],quest=null,frame=0;
 let shake=0,hitstop=0,parryFlash=0,slashArc=0,slashDir=1,swing=0,damageFlash=0,walkPhase=0,bobZ=0;
@@ -565,9 +686,10 @@ function castRay(a){const sin=Math.sin(a),cos=Math.cos(a);let dist=0,tex=1,hx=0,
 
 function renderWorld(){
   const horizon=H/2+bobZ;
-  // ---- sky: layered dawn gradient ----
+  const B=BIOMES[curBiome]||BIOMES.forest;
+  // ---- sky: layered biome gradient ----
   const sky=ctx.createLinearGradient(0,0,0,horizon);
-  sky.addColorStop(0,'#2f4a68');sky.addColorStop(0.45,'#5d7a78');sky.addColorStop(0.8,'#9fac7e');sky.addColorStop(1,'#c4c08e');
+  sky.addColorStop(0,B.sky[0]);sky.addColorStop(0.45,B.sky[1]);sky.addColorStop(0.8,B.sky[2]);sky.addColorStop(1,B.sky[3]);
   ctx.fillStyle=sky;ctx.fillRect(0,0,W,horizon);
   // ---- sun + bloom (parallax with heading) ----
   const tau=Math.PI*2;
@@ -576,14 +698,14 @@ function renderWorld(){
   const sunX=(0.5+rel/FOV)*W, sunY=horizon*0.42;
   if(sunX>-W&&sunX<W*2){
     const gr=ctx.createRadialGradient(sunX,sunY,2,sunX,sunY,H*0.6);
-    gr.addColorStop(0,'rgba(255,248,225,0.75)');gr.addColorStop(0.25,'rgba(255,236,180,0.28)');gr.addColorStop(0.6,'rgba(255,226,160,0.08)');gr.addColorStop(1,'rgba(255,226,160,0)');
+    gr.addColorStop(0,'rgba(255,248,225,0.75)');gr.addColorStop(0.25,'rgba('+B.sunBloom+',0.28)');gr.addColorStop(0.6,'rgba('+B.sunBloom+',0.08)');gr.addColorStop(1,'rgba('+B.sunBloom+',0)');
     ctx.fillStyle=gr;ctx.fillRect(0,0,W,horizon);
     ctx.fillStyle='rgba(255,250,235,0.9)';ctx.beginPath();ctx.arc(sunX,sunY,H*0.045,0,tau);ctx.fill();
   }
   // ---- distant tree-line haze (parallax silhouette) ----
   const off=player.ang*1.4;
   for(let layer=0;layer<2;layer++){
-    ctx.fillStyle=layer===0?'rgba(60,82,54,0.45)':'rgba(46,66,42,0.6)';
+    ctx.fillStyle=layer===0?'rgba('+B.hazeA+',0.45)':'rgba('+B.hazeB+',0.6)';
     const amp=layer===0?10:16, step=layer===0?5:7, ph=layer*2.1;
     for(let i=0;i<W;i+=step){const t=(i*0.018+off*(layer?0.5:0.3)+ph);
       const hh=amp+Math.sin(t)*amp*0.7+Math.sin(t*2.3+1)*amp*0.35+amp;
@@ -591,7 +713,7 @@ function renderWorld(){
   }
   // ---- ground: receding gradient + perspective texture ----
   const grd=ctx.createLinearGradient(0,horizon,0,H);
-  grd.addColorStop(0,'#56612f');grd.addColorStop(0.4,'#454f28');grd.addColorStop(1,'#333b1f');
+  grd.addColorStop(0,B.ground[0]);grd.addColorStop(0.4,B.ground[1]);grd.addColorStop(1,B.ground[2]);
   ctx.fillStyle=grd;ctx.fillRect(0,horizon,W,H-horizon);
   // scattered ground dapples that scale & scroll with depth (thinned for perf; skipped on slow devices)
   if(perfLevel>=2)for(let yy=(horizon|0)+1;yy<H;yy+=2){
@@ -601,29 +723,41 @@ function renderWorld(){
     const fog=Math.max(0,1-depth/14);
     const rowSeed=(yy*1.37+player.x*6+player.y*6);
     const cnt=1+((p*4)|0);
-    ctx.fillStyle=shade('#4d5a2c',fog);
+    ctx.fillStyle=shade(B.dapple,fog);
     for(let k=0;k<cnt;k++){const fx=((Math.sin(rowSeed*0.7+k*2.3)*0.5+0.5)*W)|0;const w=Math.max(1,(1-p)*6);ctx.fillRect(fx,yy,w,1);}
   }
   // subtle ground fog band at horizon
-  const fb=ctx.createLinearGradient(0,horizon,0,horizon+H*0.16);fb.addColorStop(0,'rgba(196,192,142,0.5)');fb.addColorStop(1,'rgba(196,192,142,0)');ctx.fillStyle=fb;ctx.fillRect(0,horizon,W,H*0.16);
+  const fb=ctx.createLinearGradient(0,horizon,0,horizon+H*0.16);fb.addColorStop(0,'rgba('+B.fogBand+',0.5)');fb.addColorStop(1,'rgba('+B.fogBand+',0)');ctx.fillStyle=fb;ctx.fillRect(0,horizon,W,H*0.16);
   // ---- boundary wall via raycaster ----
   zbuf=new Array(W).fill(26);
   for(let i=0;i<W;i++){
     const a=player.ang-FOV/2+(i/W)*FOV;const{dist,tex,hx,hy}=castRay(a);const corr=dist*Math.cos(a-player.ang);zbuf[i]=corr;if(dist<=0)continue;
     const h=Math.min(H*3.2,H/corr);const y0=horizon-h/2;const fog=Math.max(0.12,1-corr/20);
-    // mossy stone boundary — two-tone vertical shading (no per-column gradient alloc)
-    const edge=(hx+hy);const stone=((edge*2|0)%2===0)?'#52503e':'#45432f';
+    // biome boundary wall — two-tone vertical shading (no per-column gradient alloc)
+    const edge=(hx+hy);const stone=((edge*2|0)%2===0)?B.wallA:B.wallB;
     ctx.fillStyle=shade(stone,fog);ctx.fillRect(i,y0,1,h);
-    ctx.fillStyle=shade('#6a7a4a',fog);ctx.fillRect(i,y0,1,h*0.34);
-    ctx.fillStyle=shade('#33301f',fog*0.85);ctx.fillRect(i,y0+h*0.7,1,h*0.3);
-    // moss streaks on top
-    if(((edge*3|0)%4)===0){ctx.fillStyle=shade('#5f7a3a',fog);ctx.fillRect(i,y0,1,h*0.3);}
+    ctx.fillStyle=shade(B.wallMoss,fog);ctx.fillRect(i,y0,1,h*0.34);
+    ctx.fillStyle=shade(B.wallDark,fog*0.85);ctx.fillRect(i,y0+h*0.7,1,h*0.3);
+    // moss/accent streaks on top
+    if(((edge*3|0)%4)===0){ctx.fillStyle=shade(B.mossStreak,fog);ctx.fillRect(i,y0,1,h*0.3);}
   }
   // god-ray streaks fanning from sun
   if(perfLevel>=2&&sunX>0&&sunX<W){for(let s=0;s<6;s++){const rx=sunX+(s-3)*W*0.06;if(rx<0||rx>=W)continue;if((frame+s*7)%3===0){ctx.fillStyle='rgba(255,246,210,0.04)';ctx.fillRect(rx|0,0,2,horizon);}}}
   renderTrees(horizon);
   // floating motes (drifting light specks)
   for(const m of motes){const{d,ang,sx}=proj(m.x,m.y);if(Math.abs(ang)>FOV/2||d<=0)continue;const col=Math.max(0,Math.min(W-1,sx|0));if(d>zbuf[col])continue;const sz=Math.max(1,(H/d)*0.02);ctx.fillStyle='rgba(245,238,190,'+(0.55*Math.max(0,1-d/13)*(0.5+0.5*Math.sin(frame*0.05+m.ph)))+')';ctx.fillRect(sx,horizon-(H/d)*m.h,sz,sz);}
+}
+// Blend a base foliage green toward the current biome's character (frost=pale blue, volcanic=charred).
+function leafTint(hex){
+  const b=BIOMES[curBiome]||BIOMES.forest;
+  if(curBiome==='forest')return hex;
+  const n=parseInt(hex.slice(1),16);let r=n>>16&255,g=n>>8&255,bl=n&255;
+  if(curBiome==='frostfell'){ // desaturate + push toward icy blue-white
+    const avg=(r+g+bl)/3;r=(r*0.4+avg*0.3+150*0.3)|0;g=(g*0.4+avg*0.3+175*0.3)|0;bl=(bl*0.4+avg*0.3+195*0.3)|0;
+  }else if(curBiome==='volcanic'){ // char toward dark ember red-brown
+    r=(r*0.45+90*0.55)|0;g=(g*0.35+40*0.4)|0;bl=(bl*0.3+26*0.3)|0;
+  }
+  return 'rgb('+Math.min(255,r)+','+Math.min(255,g)+','+Math.min(255,bl)+')';
 }
 // ---- billboard trees: organic canopy clusters + tapered trunk ----
 function renderTrees(horizon){
@@ -651,15 +785,15 @@ function renderTrees(horizon){
     ctx.beginPath();
     ctx.moveTo(sx-trunkW,baseY);ctx.lineTo(sx+trunkW,baseY);ctx.lineTo(C+trunkW*0.62,topY);ctx.lineTo(C-trunkW*0.62,topY);ctx.closePath();ctx.fill();
     if(t.kind==='pine'){
-      const tiers=5;const gA=shade(t.tint<0.5?'#4a7838':'#42702f',fog),gB=shade(t.tint<0.5?'#37592a':'#315024',fog);
+      const tiers=5;const gA=shade(leafTint(t.tint<0.5?'#4a7838':'#42702f'),fog),gB=shade(leafTint(t.tint<0.5?'#37592a':'#315024'),fog);
       const coneBot=topY+trunkH*0.30, coneTop=topY-trunkH*0.66, coneH=coneBot-coneTop, maxW=trunkW*4.0;
       for(let k=0;k<tiers;k++){const f0=k/tiers;const ty=coneBot-coneH*f0;const tw=maxW*(1-f0*0.82);const th=coneH/tiers*1.7;
         ctx.fillStyle=k%2?gA:gB;ctx.beginPath();ctx.moveTo(C,ty-th);ctx.lineTo(C+tw,ty);ctx.lineTo(C-tw,ty);ctx.closePath();ctx.fill();
-        if(near){ctx.fillStyle=shade('#6fa848',fog*0.85);ctx.beginPath();ctx.moveTo(C,ty-th);ctx.lineTo(C-tw,ty);ctx.lineTo(C-tw*0.5,ty);ctx.closePath();ctx.fill();}}
+        if(near){ctx.fillStyle=shade(leafTint('#6fa848'),fog*0.85);ctx.beginPath();ctx.moveTo(C,ty-th);ctx.lineTo(C-tw,ty);ctx.lineTo(C-tw*0.5,ty);ctx.closePath();ctx.fill();}}
       ctx.fillStyle=gA;ctx.beginPath();ctx.moveTo(C,coneTop-trunkH*0.14);ctx.lineTo(C+maxW*0.16,coneTop+4);ctx.lineTo(C-maxW*0.16,coneTop+4);ctx.closePath();ctx.fill();
     }else{
       const R=trunkH*0.40, cyc=topY-R*0.5;
-      const dark=shade(t.tint<0.5?'#365e2a':'#3a6630',fog),mid=shade(t.tint<0.5?'#477e36':'#4d873b',fog),lite=shade('#6fa848',fog);
+      const dark=shade(leafTint(t.tint<0.5?'#365e2a':'#3a6630'),fog),mid=shade(leafTint(t.tint<0.5?'#477e36':'#4d873b'),fog),lite=shade(leafTint('#6fa848'),fog);
       const blobs=[[0,0,1.0],[-R*0.7,R*0.32,0.66],[R*0.7,R*0.30,0.66],[-R*0.42,-R*0.5,0.6],[R*0.44,-R*0.48,0.58],[0,-R*0.7,0.62]];
       for(const b of blobs){ctx.fillStyle=dark;ctx.beginPath();ctx.arc(C+b[0],cyc+b[1],R*b[2],0,Math.PI*2);ctx.fill();}
       if(near){
@@ -744,17 +878,293 @@ function drawMob(e,x,y,s,fog,sx){
   if(e.armorT>0){g.strokeStyle='rgba(150,200,120,0.4)';g.lineWidth=2;g.strokeRect(x,y,s,s);}
   if(e.enraged){g.fillStyle='rgba(193,84,58,0.16)';g.fillRect(x-p,y,s+p*2,s);}
   g.fillStyle=shade(body,fog);
-  if(shp==='wisp'){const fl=0.5+0.5*Math.sin(t*2);g.fillStyle='rgba(160,255,230,'+(0.3*fl)+')';g.fillRect(x,y,s,s);g.fillStyle=shade(c2,fog);g.fillRect(x+p*4,y+p*4,p*4,p*4);g.fillStyle=shade(body,fog*(0.7+0.3*fl));g.fillRect(x+p*3,y+p*3,p*6,p*6);for(let k=0;k<3;k++){g.fillStyle='rgba(200,255,240,'+(0.3*fl)+')';g.fillRect(x+p*(3+k*2)+Math.sin(t*3+k)*p,y+p*9+Math.cos(t*2+k)*p,p,p);}}
-  else if(shp==='sprite'){const wp=Math.sin(t*3)*p;g.fillStyle=shade(c2,fog*0.8);g.fillRect(x+p*1-wp,y+p*3,p*3,p*5);g.fillRect(x+p*8+wp,y+p*3,p*3,p*5);g.fillStyle=shade(body,fog);g.fillRect(x+p*4,y+p*3,p*4,p*6);g.fillStyle=shade(c2,fog);g.fillRect(x+p*4.5,y+p*1,p*3,p*3);g.fillStyle='#1a140a';g.fillRect(x+p*5,y+p*1.8,p*0.7,p*0.7);g.fillRect(x+p*6.3,y+p*1.8,p*0.7,p*0.7);}
-  else if(shp==='horse'){const gait=Math.sin(t*4)*p*0.6;g.fillRect(x+p*2,y+p*4,p*7,p*4);g.fillStyle=shade(c2,fog);g.fillRect(x+p*8,y+p*2,p*3,p*4);g.fillStyle=shade(body,fog);g.fillRect(x+p*2.5,y+p*8+gait,p*1.5,p*3);g.fillRect(x+p*7,y+p*8-gait,p*1.5,p*3);g.fillStyle=shade('#bce',fog*0.8);for(let k=0;k<5;k++)g.fillRect(x+p*(4.5+k*0.9),y+p*2.5+Math.sin(t*3+k)*p,p*0.6,p*3.5);g.fillStyle='#ffe14a';g.fillRect(x+p*9.6,y+p*3,p*0.8,p*0.8);}
-  else if(shp==='dryad'){const sway=Math.sin(t)*p;g.fillRect(x+p*4+sway*0.5,y+p*4,p*4,p*6);g.fillStyle=shade(c2,fog);g.fillRect(x+p*2+sway,y,p*8,p*5);g.fillRect(x+p*3+sway,y+p*1,p*6,p*4);g.fillStyle=shade('#7a5a2a',fog);g.fillRect(x+p*5,y+p*9,p*2,p*3);g.fillStyle=shade('#c8e88a',fog);g.fillRect(x+p*3+sway,y+p,p*1.5,p*1.5);g.fillRect(x+p*8+sway,y+p*2,p*1.5,p*1.5);}
-  else if(shp==='harpy'){const flap=Math.sin(t*4)*p*2;g.fillStyle=shade(c2,fog);g.fillRect(x+p*0,y+p*3-flap,p*4,p*5);g.fillRect(x+p*8,y+p*3-flap,p*4,p*5);g.fillStyle=shade('#8a6a3a',fog);g.fillRect(x+p*0,y+p*3-flap,p*1.5,p*5);g.fillRect(x+p*10.5,y+p*3-flap,p*1.5,p*5);g.fillStyle=shade(body,fog);g.fillRect(x+p*4,y+p*3,p*4,p*5);g.fillStyle=shade('#e0c080',fog);g.fillRect(x+p*5,y+p*1,p*2,p*3);g.fillStyle='#c1543a';g.fillRect(x+p*5.5,y+p*1.8,p*0.8,p*0.8);}
-  else if(shp==='fowl'){const hop=Math.abs(Math.sin(t*3))*p;g.fillStyle=shade(body,fog);g.fillRect(x+p*3,y+p*4-hop,p*6,p*5);g.fillStyle=shade(c2,fog);g.fillRect(x+p*7,y+p*2-hop,p*3,p*3);g.fillStyle='#c1543a';g.fillRect(x+p*8,y+p*1.5-hop,p*1.5,p*1.5);g.fillStyle=shade(c2,fog*0.8);for(let k=0;k<3;k++)g.fillRect(x+p*(2-k*0.5),y+p*4-hop+k*p,p*2,p);g.fillStyle='#1a140a';g.fillRect(x+p*8.2,y+p*2.4-hop,p*0.7,p*0.7);}
-  else if(shp==='golem'){g.fillRect(x+p*2,y+p*2,p*8,p*8);g.fillStyle=shade(c2,fog);g.fillRect(x+p*3.5,y,p*5,p*3);g.fillStyle=shade('#7aa85a',fog);g.fillRect(x+p*3,y+p*5,p*2,p*1.5);g.fillRect(x+p*7,y+p*3,p*1.5,p*1.5);g.fillRect(x+p*5,y+p*8,p*2.5,p*1.2);g.fillStyle=shade(body,fog*0.7);g.fillRect(x+p*1,y+p*4,p*1.5,p*5);g.fillRect(x+p*9.5,y+p*4,p*1.5,p*5);g.fillStyle='#ffe14a';g.fillRect(x+p*4.5,y+p*1,p,p);g.fillRect(x+p*7,y+p*1,p,p);}
-  else if(shp==='ghost'){const fade=0.5+0.3*Math.sin(t*1.5);g.globalAlpha=fade;g.fillStyle=shade(body,fog);g.fillRect(x+p*3,y+p*1,p*6,p*7);for(let k=0;k<4;k++)g.fillRect(x+p*(3+k*1.5),y+p*8+Math.sin(t*3+k)*p,p*1.2,p*3);g.fillStyle=shade(c2,fog);g.fillRect(x+p*4,y,p*4,p*3);g.globalAlpha=1;g.fillStyle='#1a1020';g.fillRect(x+p*4.5,y+p*1,p,p*1.5);g.fillRect(x+p*6.5,y+p*1,p,p*1.5);}
-  else if(shp==='serpent'){const wav=Math.sin(t*2)*p*1.5;g.fillStyle=shade(body,fog);for(let k=0;k<5;k++)g.fillRect(x+p*(1+k*2),y+p*6+Math.sin(t*2+k*0.8)*p*1.5,p*2.4,p*2.4);g.fillStyle=shade(c2,fog);g.fillRect(x+p*9,y+p*4+wav,p*3,p*3);g.fillStyle='#ff0';g.fillRect(x+p*11,y+p*4.5+wav,p,p);g.fillStyle=shade('#2a3a1a',fog);for(let k=0;k<4;k++)g.fillRect(x+p*(2+k*2),y+p*6.5+Math.sin(t*2+k*0.8)*p*1.5,p,p);}
-  else if(shp==='wendigo'){const lope=Math.sin(t*3)*p;g.fillStyle=shade(body,fog);g.fillRect(x+p*3,y+p*3,p*5,p*7);g.fillRect(x+p*2,y+p*4+lope,p*1.5,p*5);g.fillRect(x+p*8,y+p*4-lope,p*1.5,p*5);g.fillStyle=shade(c2,fog);g.fillRect(x+p*4,y,p*4,p*4);g.fillStyle='#e8e8e8';g.fillRect(x+p*3.5,y-p*2,p,p*3);g.fillRect(x+p*7.5,y-p*2,p,p*3);g.fillRect(x+p*4.5,y-p*1.5,p*0.7,p*2);g.fillRect(x+p*6.7,y-p*1.5,p*0.7,p*2);g.fillStyle='#c1543a';g.fillRect(x+p*4.5,y+p*1.5,p,p);g.fillRect(x+p*6.5,y+p*1.5,p,p);g.fillStyle=shade('#888',fog);g.fillRect(x+p*4.5,y+p*3.5,p*3,p*0.6);}
-  else if(shp==='wyrm'){const coil=Math.sin(t*1.5)*p;g.fillStyle=shade(c2,fog);g.fillRect(x+p*1,y+p*5,p*10,p*5);for(let k=0;k<5;k++){g.fillStyle=shade(c2,fog*0.85);g.fillRect(x+p*(1+k*2),y+p*5+Math.sin(t+k)*p,p*1.6,p*1.6);}g.fillStyle=shade(body,fog);g.fillRect(x+p*3,y+p*1+coil,p*6,p*6);g.fillStyle=shade(c,fog*1.2);g.fillRect(x+p*2,y-p*1+coil,p*2,p*3);g.fillRect(x+p*8,y-p*1+coil,p*2,p*3);g.fillStyle='#fff';g.fillRect(x+p*4,y+p*2+coil,p*1.3,p*1.3);g.fillRect(x+p*6.7,y+p*2+coil,p*1.3,p*1.3);g.fillStyle='#c00';g.fillRect(x+p*4.3,y+p*2.3+coil,p*0.6,p*0.6);g.fillRect(x+p*7,y+p*2.3+coil,p*0.6,p*0.6);g.fillStyle=shade('#c1543a',fog);g.fillRect(x+p*5,y+p*5+coil,p*2,p);}
+  if(shp==='wisp'){
+    // floating will-o'-wisp: layered glowing orb, flickering flame core, drifting motes & tail
+    const fl=0.5+0.5*Math.sin(t*2), fl2=0.5+0.5*Math.sin(t*3.3+1);
+    // outer glow halos
+    g.globalAlpha=0.18*fl;g.fillStyle=shade(c2,fog);g.beginPath();g.arc(x+p*6,y+p*5.5,p*5.2,0,Math.PI*2);g.fill();
+    g.globalAlpha=0.28*fl;g.beginPath();g.arc(x+p*6,y+p*5.5,p*3.6,0,Math.PI*2);g.fill();
+    g.globalAlpha=1;
+    // trailing wisps below
+    g.globalAlpha=0.4+0.3*fl;g.fillStyle=shade(c2,fog);
+    for(let k=0;k<3;k++){const tw=Math.sin(t*2+k*1.2)*p*1.2;g.beginPath();g.arc(x+p*6+tw,y+p*(8.5+k*1.4),p*(1.2-k*0.3),0,Math.PI*2);g.fill();}
+    g.globalAlpha=1;
+    // core orb
+    g.fillStyle=shade(body,fog*(0.85+0.15*fl));g.beginPath();g.arc(x+p*6,y+p*5.5,p*2.6,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(c2,fog);g.beginPath();g.arc(x+p*6,y+p*5,p*1.6,0,Math.PI*2);g.fill();
+    // bright flame center
+    g.fillStyle='#fff';g.globalAlpha=0.7+0.3*fl2;g.beginPath();g.arc(x+p*5.7,y+p*4.7,p*0.9,0,Math.PI*2);g.fill();g.globalAlpha=1;
+    // sparks orbiting
+    for(let k=0;k<4;k++){const a=t*2+k*1.57;g.fillStyle=shade('#e8fff4',fog);g.globalAlpha=0.4+0.5*Math.sin(t*4+k);g.fillRect(x+p*6+Math.cos(a)*p*3.2,y+p*5.5+Math.sin(a)*p*3,p*0.7,p*0.7);}
+    g.globalAlpha=1;
+  }
+  else if(shp==='sprite'){
+    // thorn sprite: small thorny fae with shimmering insect wings and glowing core
+    const wp=Math.sin(t*5)*p*1.2, fl=0.5+0.5*Math.sin(t*4);
+    // wings (translucent, flapping)
+    g.globalAlpha=0.55;g.fillStyle=shade('#dfffe8',fog);
+    g.beginPath();g.ellipse(x+p*3-wp*0.5,y+p*4,p*2.2,p*3.2,-0.5,0,Math.PI*2);g.fill();
+    g.beginPath();g.ellipse(x+p*9+wp*0.5,y+p*4,p*2.2,p*3.2,0.5,0,Math.PI*2);g.fill();
+    g.globalAlpha=0.3;g.fillStyle=shade(c2,fog);
+    g.beginPath();g.ellipse(x+p*3-wp*0.5,y+p*4,p*1.4,p*2.2,-0.5,0,Math.PI*2);g.fill();
+    g.beginPath();g.ellipse(x+p*9+wp*0.5,y+p*4,p*1.4,p*2.2,0.5,0,Math.PI*2);g.fill();
+    g.globalAlpha=1;
+    // thorny body (diamond with spikes)
+    g.fillStyle=shade(body,fog);g.beginPath();g.moveTo(x+p*6,y+p*2.5);g.lineTo(x+p*8,y+p*6);g.lineTo(x+p*6,y+p*9.5);g.lineTo(x+p*4,y+p*6);g.closePath();g.fill();
+    // thorns
+    g.fillStyle=shade(shade(body,0.7),fog);
+    g.beginPath();g.moveTo(x+p*8,y+p*5);g.lineTo(x+p*9.5,y+p*4.5);g.lineTo(x+p*7.8,y+p*6);g.closePath();g.fill();
+    g.beginPath();g.moveTo(x+p*4,y+p*5);g.lineTo(x+p*2.5,y+p*4.5);g.lineTo(x+p*4.2,y+p*6);g.closePath();g.fill();
+    g.beginPath();g.moveTo(x+p*6,y+p*9.5);g.lineTo(x+p*5.2,y+p*11);g.lineTo(x+p*6.8,y+p*11);g.closePath();g.fill();
+    // glowing core
+    g.fillStyle=shade(c2,fog);g.globalAlpha=0.5+0.5*fl;g.beginPath();g.arc(x+p*6,y+p*5.5,p*1.3,0,Math.PI*2);g.fill();g.globalAlpha=1;
+    g.fillStyle='#fff';g.beginPath();g.arc(x+p*6,y+p*5.3,p*0.6,0,Math.PI*2);g.fill();
+    // tiny eyes
+    g.fillStyle='#1a2410';g.fillRect(x+p*5.3,y+p*4,p*0.5,p*0.6);g.fillRect(x+p*6.3,y+p*4,p*0.5,p*0.6);
+  }
+  else if(shp==='horse'){
+    // kelpie: a sleek water-horse — barrel body, four legs, arched neck, flowing mane, fish-tail
+    const gait=Math.sin(t*4)*p*0.5;
+    // tail (flowing, behind)
+    g.fillStyle=shade(c2,fog*0.85);g.beginPath();g.moveTo(x+p*1.5,y+p*5);g.quadraticCurveTo(x-p*1,y+p*7,x+p*0.5,y+p*10);g.quadraticCurveTo(x+p*1.5,y+p*7.5,x+p*2.5,y+p*7);g.closePath();g.fill();
+    // back legs
+    g.fillStyle=shade(shade(body,0.75),fog);g.fillRect(x+p*2.5,y+p*7.5+gait,p*1.3,p*3.5);g.fillRect(x+p*3.8,y+p*7.5-gait*0.5,p*1.3,p*3.5);
+    // barrel body
+    g.fillStyle=shade(body,fog);g.beginPath();g.ellipse(x+p*5,y+p*6,p*3.6,p*2.4,0,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(body,1.18),fog);g.beginPath();g.ellipse(x+p*5,y+p*5,p*3.0,p*1.2,0,0,Math.PI*2);g.fill();
+    // front legs
+    g.fillStyle=shade(shade(body,0.8),fog);g.fillRect(x+p*6.2,y+p*7.5-gait,p*1.3,p*3.5);g.fillRect(x+p*7.5,y+p*7.5+gait,p*1.3,p*3.5);
+    g.fillStyle=shade('#1a2630',fog);g.fillRect(x+p*6.2,y+p*10.5,p*1.3,p*0.6);g.fillRect(x+p*7.5,y+p*10.5,p*1.3,p*0.6);
+    // arched neck
+    g.fillStyle=shade(body,fog);g.beginPath();g.moveTo(x+p*7.5,y+p*5);g.lineTo(x+p*9,y+p*1.5);g.lineTo(x+p*10.5,y+p*2);g.lineTo(x+p*9,y+p*5.5);g.closePath();g.fill();
+    // head
+    g.fillStyle=shade(shade(body,1.05),fog);g.beginPath();g.ellipse(x+p*10,y+p*2,p*1.8,p*1.4,0.4,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(body,fog);g.fillRect(x+p*10.5,y+p*2.2,p*1.6,p*1.1);  // muzzle
+    // ears
+    g.fillStyle=shade(c2,fog);g.fillRect(x+p*9.3,y+p*0.6,p*0.6,p*1);g.fillRect(x+p*10.1,y+p*0.5,p*0.6,p*1);
+    // flowing kelp mane
+    g.fillStyle=shade('#7ad0c0',fog*0.9);for(let k=0;k<5;k++)g.fillRect(x+p*(7.8+k*0.5),y+p*1.5+Math.sin(t*3+k)*p*0.8,p*0.6,p*3.5);
+    // glowing eye
+    g.fillStyle='#ffe14a';g.fillRect(x+p*10.2,y+p*1.5,p*0.8,p*0.8);g.fillStyle='#1a2630';g.fillRect(x+p*10.4,y+p*1.7,p*0.4,p*0.4);
+  }
+  else if(shp==='dryad'){
+    // dryad: a graceful tree-spirit — bark torso, leafy canopy crown, branch arms, soft face
+    const sway=Math.sin(t)*p*0.8;
+    // roots/legs
+    g.fillStyle=shade('#5a4226',fog);g.fillRect(x+p*4.5,y+p*8.5,p*1.3,p*2.8);g.fillRect(x+p*6,y+p*8.5,p*1.3,p*2.8);
+    g.fillStyle=shade('#4a3420',fog);g.fillRect(x+p*4,y+p*10.8,p*2.2,p*0.6);g.fillRect(x+p*6,y+p*10.8,p*2.2,p*0.6);
+    // bark torso (tapered)
+    g.fillStyle=shade(body,fog);g.beginPath();g.moveTo(x+p*4+sway*0.4,y+p*4);g.lineTo(x+p*8+sway*0.4,y+p*4);g.lineTo(x+p*7.2,y+p*9);g.lineTo(x+p*4.8,y+p*9);g.closePath();g.fill();
+    g.fillStyle=shade(shade(body,0.78),fog);g.fillRect(x+p*5.6+sway*0.4,y+p*4.5,p*0.5,p*4.2);  // bark seam
+    // branch arms
+    g.strokeStyle=shade('#6a4a2a',fog);g.lineWidth=p*0.8;g.lineCap='round';
+    g.beginPath();g.moveTo(x+p*4.2+sway*0.4,y+p*5);g.lineTo(x+p*2+sway,y+p*3.2);g.lineTo(x+p*1.2+sway,y+p*1.8);g.stroke();
+    g.beginPath();g.moveTo(x+p*7.8+sway*0.4,y+p*5);g.lineTo(x+p*10+sway,y+p*3.2);g.lineTo(x+p*10.8+sway,y+p*1.8);g.stroke();
+    // leafy canopy crown
+    g.fillStyle=shade(c2,fog);
+    g.beginPath();g.arc(x+p*6+sway,y+p*1.8,p*3.4,0,Math.PI*2);g.fill();
+    g.beginPath();g.arc(x+p*3.5+sway,y+p*2.8,p*2.2,0,Math.PI*2);g.fill();
+    g.beginPath();g.arc(x+p*8.5+sway,y+p*2.8,p*2.2,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(c2,1.2),fog);g.beginPath();g.arc(x+p*5+sway,y+p*1,p*1.6,0,Math.PI*2);g.fill();
+    // little blossoms
+    g.fillStyle=shade('#e8c0d0',fog);g.fillRect(x+p*4+sway,y+p*2,p*0.8,p*0.8);g.fillRect(x+p*8+sway,y+p*3,p*0.8,p*0.8);g.fillRect(x+p*6.5+sway,y+p*1,p*0.8,p*0.8);
+    // gentle face on the trunk
+    g.fillStyle=shade('#2a1d10',fog);g.fillRect(x+p*5+sway*0.4,y+p*5.2,p*0.7,p*0.9);g.fillRect(x+p*6.4+sway*0.4,y+p*5.2,p*0.7,p*0.9);
+    g.fillStyle=shade('#c8e88a',fog);g.fillRect(x+p*5.1+sway*0.4,y+p*5.4,p*0.3,p*0.4);g.fillRect(x+p*6.5+sway*0.4,y+p*5.4,p*0.3,p*0.4);
+  }
+  else if(shp==='harpy'){
+    // harpy: bird-woman with broad layered feathered wings, taloned legs, fierce crested head
+    const flap=Math.sin(t*3)*p*1.6;
+    // far wing (behind)
+    g.fillStyle=shade(shade(c2,0.7),fog);
+    g.beginPath();g.moveTo(x+p*4,y+p*4);g.lineTo(x-p*0.5,y+p*1.5-flap);g.lineTo(x+p*0.5,y+p*5-flap);g.lineTo(x+p*2,y+p*4.5);g.closePath();g.fill();
+    // taloned legs
+    g.fillStyle=shade('#c8a030',fog);g.fillRect(x+p*4.5,y+p*8.5,p*0.9,p*2.5);g.fillRect(x+p*6.5,y+p*8.5,p*0.9,p*2.5);
+    g.fillStyle=shade('#8a6010',fog);for(let k=0;k<3;k++){g.fillRect(x+p*(4+k*0.6),y+p*10.8,p*0.4,p*0.9);g.fillRect(x+p*(6+k*0.6),y+p*10.8,p*0.4,p*0.9);}
+    // body/torso
+    g.fillStyle=shade(body,fog);g.beginPath();g.ellipse(x+p*6,y+p*6,p*2.2,p*3.0,0,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(body,1.15),fog);for(let k=0;k<3;k++)g.fillRect(x+p*4.6,y+p*4.5+k*p*1.3,p*2.8,p*0.7);  // chest feathers
+    // near wing (front, layered feathers)
+    g.fillStyle=shade(c2,fog);
+    g.beginPath();g.moveTo(x+p*8,y+p*4);g.lineTo(x+p*12.5,y+p*1.5-flap);g.lineTo(x+p*11.5,y+p*5-flap);g.lineTo(x+p*10,y+p*4.5);g.closePath();g.fill();
+    g.fillStyle=shade(shade(c2,0.82),fog);for(let k=0;k<4;k++){const ff=k/4;g.beginPath();g.moveTo(x+p*(8.5+k*1),y+p*4-ff*flap);g.lineTo(x+p*(10.5+k*0.5),y+p*(2.2-ff*1.2)-flap);g.lineTo(x+p*(9+k*1),y+p*4.5);g.closePath();g.fill();}
+    // head with crest
+    g.fillStyle=shade('#e0c080',fog);g.beginPath();g.arc(x+p*6,y+p*2.5,p*1.7,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(c2,fog);for(let k=0;k<3;k++)g.fillRect(x+p*(5+k*0.7),y+p*0.4,p*0.5,p*1.3);  // crest feathers
+    // beak
+    g.fillStyle='#e0a030';g.beginPath();g.moveTo(x+p*5,y+p*2.6);g.lineTo(x+p*3.6,y+p*3);g.lineTo(x+p*5,y+p*3.4);g.closePath();g.fill();
+    // fierce eye
+    g.fillStyle='#1a140a';g.fillRect(x+p*5.6,y+p*2,p*0.9,p*0.9);g.fillStyle='#c1543a';g.fillRect(x+p*5.8,y+p*2.2,p*0.4,p*0.4);
+  }
+  else if(shp==='fowl'){
+    // cockatrice: plump feathered body, folded wing, comb, beak, scaly legs, tail plumes
+    const hop=Math.abs(Math.sin(t*1.6))*p*0.35;
+    // tail plumes
+    g.fillStyle=shade(c2,fog*0.85);for(let k=0;k<3;k++){g.beginPath();g.moveTo(x+p*2.5,y+p*5-hop);g.lineTo(x+p*(0-k*0.4),y+p*(3.5+k*1.2)-hop);g.lineTo(x+p*2.5,y+p*(6+k*0.4)-hop);g.closePath();g.fill();}
+    // body
+    g.fillStyle=shade(body,fog);g.beginPath();g.ellipse(x+p*6,y+p*6-hop,p*3.4,p*3.0,0,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(body,1.18),fog);g.beginPath();g.ellipse(x+p*6,y+p*5-hop,p*2.6,p*1.4,0,0,Math.PI*2);g.fill();
+    // folded wing
+    g.fillStyle=shade(c2,fog);g.beginPath();g.ellipse(x+p*5.5,y+p*6-hop,p*2.0,p*2.4,0.3,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(c2,0.8),fog);for(let k=0;k<3;k++)g.fillRect(x+p*(4.4+k*0.7),y+p*6-hop,p*0.4,p*2.2);
+    // neck + head
+    g.fillStyle=shade(body,fog);g.fillRect(x+p*7.5,y+p*2.5-hop,p*1.8,p*3.5);
+    g.fillStyle=shade(shade(body,1.1),fog);g.beginPath();g.arc(x+p*8.6,y+p*2.2-hop,p*1.7,0,Math.PI*2);g.fill();
+    // comb (red crest)
+    g.fillStyle='#d23a2a';for(let k=0;k<3;k++)g.fillRect(x+p*(7.8+k*0.6),y+p*(0.4+ (k===1?-0.3:0))-hop,p*0.5,p*1.2);
+    // wattle
+    g.fillStyle='#c1543a';g.fillRect(x+p*9.4,y+p*3-hop,p*0.6,p*1.2);
+    // beak
+    g.fillStyle='#e0a030';g.beginPath();g.moveTo(x+p*10,y+p*2-hop);g.lineTo(x+p*11.6,y+p*2.5-hop);g.lineTo(x+p*10,y+p*3-hop);g.closePath();g.fill();
+    // eye
+    g.fillStyle='#1a140a';g.fillRect(x+p*8.8,y+p*1.6-hop,p*0.8,p*0.8);g.fillStyle='#ffd23a';g.fillRect(x+p*9.0,y+p*1.7-hop,p*0.35,p*0.35);
+    // scaly legs
+    g.fillStyle=shade('#c8a030',fog);g.fillRect(x+p*5,y+p*8.6,p*0.7,p*2.2);g.fillRect(x+p*7,y+p*8.6,p*0.7,p*2.2);
+    g.fillStyle=shade('#a07820',fog);g.fillRect(x+p*4.6,y+p*10.6,p*1.5,p*0.5);g.fillRect(x+p*6.6,y+p*10.6,p*1.5,p*0.5);
+  }
+  else if(shp==='golem'){
+    // craggy stone brute: uneven rock torso, boulder shoulders, mossy patches, glowing eyes
+    g.fillStyle=shade(body,fog);
+    g.beginPath();g.moveTo(x+p*2.5,y+p*2.5);g.lineTo(x+p*9.5,y+p*2.2);g.lineTo(x+p*10,y+p*9.5);g.lineTo(x+p*2,y+p*9.8);g.closePath();g.fill();  // irregular torso
+    g.fillStyle=shade(shade(body,1.18),fog);g.fillRect(x+p*2.5,y+p*2.5,p*7,p*1.4);  // lit top
+    g.fillStyle=shade(shade(body,0.7),fog);  // cracks
+    g.fillRect(x+p*5,y+p*4,p*0.5,p*4);g.fillRect(x+p*5.5,y+p*6,p*2,p*0.5);g.fillRect(x+p*7.5,y+p*3.5,p*0.5,p*2.5);
+    // boulder shoulders
+    g.fillStyle=shade(body,fog*0.92);g.beginPath();g.arc(x+p*1.8,y+p*4,p*1.8,0,Math.PI*2);g.arc(x+p*10.2,y+p*4,p*1.8,0,Math.PI*2);g.fill();
+    // arms
+    g.fillStyle=shade(shade(body,0.8),fog);g.fillRect(x+p*0.5,y+p*5,p*1.8,p*4.5);g.fillRect(x+p*9.7,y+p*5,p*1.8,p*4.5);
+    // mossy growth patches
+    g.fillStyle=shade('#6aa84a',fog);g.fillRect(x+p*3,y+p*2.2,p*2.5,p*1.1);g.fillRect(x+p*7,y+p*8.6,p*2.2,p*1.0);g.fillRect(x+p*2,y+p*6,p*1.2,p*1.6);
+    g.fillStyle=shade('#8ac85a',fog);g.fillRect(x+p*3.3,y+p*2.2,p*1.0,p*0.6);
+    // blocky head
+    g.fillStyle=shade(shade(body,1.05),fog);g.fillRect(x+p*4,y,p*4,p*3);
+    g.fillStyle=shade('#5a8a3a',fog);g.fillRect(x+p*4,y,p*4,p*0.7);
+    // glowing eyes
+    const gg=0.6+0.4*Math.sin(t*3);g.fillStyle='#ffe14a';g.globalAlpha=gg;g.fillRect(x+p*4.6,y+p*1,p*1,p*1);g.fillRect(x+p*6.4,y+p*1,p*1,p*1);g.globalAlpha=1;
+    g.fillStyle='#a06010';g.fillRect(x+p*4.9,y+p*1.3,p*0.5,p*0.5);g.fillRect(x+p*6.7,y+p*1.3,p*0.5,p*0.5);
+  }
+  else if(shp==='ghost'){
+    // banshee/shade: flowing translucent wraith — hooded head, trailing arms, tattered wispy hem
+    const fade=0.55+0.25*Math.sin(t*1.5), drift=Math.sin(t*1.2)*p*0.6;
+    g.globalAlpha=fade;
+    // outer aura
+    g.fillStyle=shade(c2,fog);g.globalAlpha=fade*0.3;g.beginPath();g.ellipse(x+p*6,y+p*5,p*4.2,p*5,0,0,Math.PI*2);g.fill();
+    g.globalAlpha=fade;
+    // body — a tapering shroud
+    g.fillStyle=shade(body,fog);g.beginPath();
+    g.moveTo(x+p*3.5+drift,y+p*3);
+    g.quadraticCurveTo(x+p*2.5+drift,y+p*8,x+p*2.8+drift,y+p*9.5);
+    // tattered hem (wavy bottom)
+    for(let k=0;k<5;k++){g.lineTo(x+p*(3+k*1.5)+drift,y+p*(10.5+(k%2?0.8:-0.4))+Math.sin(t*3+k)*p);g.lineTo(x+p*(3.7+k*1.5)+drift,y+p*9.5);}
+    g.quadraticCurveTo(x+p*9.5+drift,y+p*8,x+p*8.5+drift,y+p*3);
+    g.closePath();g.fill();
+    // hood/head
+    g.fillStyle=shade(shade(body,1.1),fog);g.beginPath();g.arc(x+p*6+drift,y+p*3,p*2.6,Math.PI,0);g.fill();
+    g.fillRect(x+p*3.4+drift,y+p*3,p*5.2,p*1.5);
+    // trailing arms
+    g.fillStyle=shade(body,fog);g.globalAlpha=fade*0.85;
+    g.beginPath();g.moveTo(x+p*3.6+drift,y+p*4.5);g.quadraticCurveTo(x+p*1+drift,y+p*6,x+p*1.5+drift,y+p*8);g.quadraticCurveTo(x+p*3+drift,y+p*6.5,x+p*4+drift,y+p*5.5);g.closePath();g.fill();
+    g.beginPath();g.moveTo(x+p*8.4+drift,y+p*4.5);g.quadraticCurveTo(x+p*11+drift,y+p*6,x+p*10.5+drift,y+p*8);g.quadraticCurveTo(x+p*9+drift,y+p*6.5,x+p*8+drift,y+p*5.5);g.closePath();g.fill();
+    g.globalAlpha=1;
+    // hollow glowing eyes
+    const eg=0.6+0.4*Math.sin(t*2.5);g.fillStyle=shade(c2,fog);g.globalAlpha=eg;
+    g.fillRect(x+p*4.6+drift,y+p*2.4,p*1.1,p*1.4);g.fillRect(x+p*6.4+drift,y+p*2.4,p*1.1,p*1.4);
+    g.globalAlpha=1;g.fillStyle='#fff';g.fillRect(x+p*4.9+drift,y+p*2.7,p*0.5,p*0.6);g.fillRect(x+p*6.7+drift,y+p*2.7,p*0.5,p*0.6);
+  }
+  else if(shp==='serpent'){
+    // basilisk: a thick coiling scaled snake — overlapping body segments, raised fanged head, tongue
+    const wav=Math.sin(t*1.6);
+    // body coil — overlapping circular segments, tapering toward the tail (left)
+    for(let k=0;k<7;k++){const seg=k/6;const r=p*(0.9+seg*1.4);
+      const bxk=x+p*(1+k*1.5), byk=y+p*(7.5)+Math.sin(t*1.6+k*0.7)*p*1.6;
+      g.fillStyle=shade(body,fog*(0.7+seg*0.3));g.beginPath();g.arc(bxk,byk,r,0,Math.PI*2);g.fill();
+      // scale highlight on each segment
+      g.fillStyle=shade(shade(body,1.25),fog);g.beginPath();g.arc(bxk,byk-r*0.35,r*0.5,0,Math.PI*2);g.fill();
+      // belly scute
+      g.fillStyle=shade(shade(c2,0.9),fog);g.fillRect(bxk-r*0.5,byk+r*0.4,r,r*0.4);
+    }
+    // raised neck + head (right)
+    const hx=x+p*9.5, hy=y+p*4+wav*p;
+    g.fillStyle=shade(body,fog);g.fillRect(x+p*9,y+p*5.5,p*1.8,p*2.5);  // neck
+    g.fillStyle=shade(shade(c2,1.05),fog);g.beginPath();g.ellipse(hx+p*0.8,hy,p*2.2,p*1.6,0,0,Math.PI*2);g.fill();  // head
+    // brow ridges
+    g.fillStyle=shade(shade(c2,0.7),fog);g.fillRect(hx-p*0.4,hy-p*1.2,p*1.2,p*0.6);g.fillRect(hx+p*1.2,hy-p*1.2,p*1.2,p*0.6);
+    // forked tongue
+    g.strokeStyle='#d23a4a';g.lineWidth=p*0.3;g.beginPath();g.moveTo(hx+p*2.6,hy+p*0.3);g.lineTo(hx+p*4,hy+p*0.3);g.moveTo(hx+p*4,hy+p*0.3);g.lineTo(hx+p*4.6,hy-p*0.2);g.moveTo(hx+p*4,hy+p*0.3);g.lineTo(hx+p*4.6,hy+p*0.8);g.stroke();
+    // fangs
+    g.fillStyle='#fff';g.fillRect(hx+p*2,hy+p*0.8,p*0.35,p*0.9);g.fillRect(hx+p*2.6,hy+p*0.8,p*0.35,p*0.9);
+    // glowing slit eyes (basilisk stare)
+    g.fillStyle='#ffe14a';g.fillRect(hx+p*0.2,hy-p*0.6,p*1,p*0.7);g.fillRect(hx+p*1.4,hy-p*0.6,p*1,p*0.7);
+    g.fillStyle='#1a2410';g.fillRect(hx+p*0.6,hy-p*0.55,p*0.25,p*0.6);g.fillRect(hx+p*1.8,hy-p*0.55,p*0.25,p*0.6);
+  }
+  else if(shp==='wendigo'){
+    // wendigo: gaunt antlered beast — emaciated ribbed torso, hunched shoulders, skull head, claws
+    const lope=Math.sin(t*3)*p*0.8;
+    // hind legs (digitigrade)
+    g.fillStyle=shade(shade(body,0.72),fog);
+    g.beginPath();g.moveTo(x+p*3,y+p*7);g.lineTo(x+p*2,y+p*9.5+lope);g.lineTo(x+p*2.8,y+p*11);g.lineTo(x+p*3.8,y+p*9);g.closePath();g.fill();
+    g.beginPath();g.moveTo(x+p*8,y+p*7);g.lineTo(x+p*9,y+p*9.5-lope);g.lineTo(x+p*8.2,y+p*11);g.lineTo(x+p*7.2,y+p*9);g.closePath();g.fill();
+    // gaunt torso (narrow waist)
+    g.fillStyle=shade(body,fog);g.beginPath();g.moveTo(x+p*3.5,y+p*3);g.lineTo(x+p*7.5,y+p*3);g.lineTo(x+p*6.8,y+p*7.5);g.lineTo(x+p*4.2,y+p*7.5);g.closePath();g.fill();
+    // visible ribs
+    g.strokeStyle=shade(shade(body,1.3),fog);g.lineWidth=p*0.35;
+    for(let k=0;k<4;k++){g.beginPath();g.moveTo(x+p*4,y+p*(4+k*0.9));g.quadraticCurveTo(x+p*5.5,y+p*(4.5+k*0.9),x+p*7,y+p*(4+k*0.9));g.stroke();}
+    // hunched shoulders + long arms with claws
+    g.fillStyle=shade(shade(body,0.85),fog);
+    g.beginPath();g.moveTo(x+p*3.5,y+p*3.5);g.lineTo(x+p*1.5,y+p*5+lope);g.lineTo(x+p*1.8,y+p*8+lope);g.lineTo(x+p*3,y+p*5);g.closePath();g.fill();
+    g.beginPath();g.moveTo(x+p*7.5,y+p*3.5);g.lineTo(x+p*9.5,y+p*5-lope);g.lineTo(x+p*9.2,y+p*8-lope);g.lineTo(x+p*8,y+p*5);g.closePath();g.fill();
+    g.fillStyle=shade('#d8d0c0',fog);for(let k=0;k<3;k++){g.fillRect(x+p*(1.4+k*0.4),y+p*8+lope,p*0.3,p*1.4);g.fillRect(x+p*(9+k*0.4),y+p*8-lope,p*0.3,p*1.4);}
+    // skull head
+    g.fillStyle=shade(c2,fog);g.beginPath();g.ellipse(x+p*5.5,y+p*2,p*2,p*2.2,0,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(c2,0.7),fog);g.fillRect(x+p*4.8,y+p*3.2,p*1.6,p*1.2);  // gaunt jaw
+    // antlers
+    g.strokeStyle=shade('#cabfa0',fog);g.lineWidth=p*0.5;g.lineCap='round';
+    g.beginPath();g.moveTo(x+p*4.5,y+p*0.8);g.lineTo(x+p*3,y-p*1.5);g.moveTo(x+p*3.6,y-p*0.4);g.lineTo(x+p*2.2,y-p*0.8);g.moveTo(x+p*3.4,y-p*1);g.lineTo(x+p*3.8,y-p*2.4);g.stroke();
+    g.beginPath();g.moveTo(x+p*6.5,y+p*0.8);g.lineTo(x+p*8,y-p*1.5);g.moveTo(x+p*7.4,y-p*0.4);g.lineTo(x+p*8.8,y-p*0.8);g.moveTo(x+p*7.6,y-p*1);g.lineTo(x+p*7.2,y-p*2.4);g.stroke();
+    // glowing eyes + teeth
+    const eg=0.6+0.4*Math.sin(t*4);g.fillStyle='#c1543a';g.globalAlpha=eg;g.fillRect(x+p*4.6,y+p*1.6,p*0.9,p*0.9);g.fillRect(x+p*6,y+p*1.6,p*0.9,p*0.9);g.globalAlpha=1;
+    g.fillStyle='#e8e8e8';for(let k=0;k<4;k++)g.fillRect(x+p*(4.9+k*0.5),y+p*3.4,p*0.3,p*0.7);
+  }
+  else if(shp==='wyrm'){
+    // ===== BOSS: a coiling horned dragon — layered body, spine ridges, frilled horned head, fangs =====
+    const coil=Math.sin(t*1.5)*p, sway=Math.sin(t*1.1);
+    // tail coil receding behind, segmented and tapering
+    for(let k=6;k>=0;k--){const seg=k/6;const sxk=x+p*(1.2+k*1.5), syk=y+p*(8.5)+Math.sin(t*1.3+k*0.7)*p*1.6;const r=p*(1.0+seg*1.8);
+      g.fillStyle=shade(c2,fog*(0.7+seg*0.3));g.beginPath();g.ellipse(sxk,syk,r,r*0.92,0,0,Math.PI*2);g.fill();
+      g.fillStyle=shade(shade(c2,0.7),fog);g.fillRect(sxk-r*0.3,syk-r,r*0.6,r*0.5);}  // back ridge dab
+    // main body mass (chest), with belly plating
+    const bodyX=x+p*3, bodyY=y+p*1.5+coil;
+    g.fillStyle=shade(c2,fog);g.beginPath();g.ellipse(bodyX+p*2.5,bodyY+p*4,p*3.6,p*4.4,0,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(c,1.1),fog);for(let k=0;k<4;k++)g.fillRect(bodyX+p*1.2,bodyY+p*2+k*p*1.4,p*2.6,p*1.0);  // belly scutes
+    // spine ridge sail down the back
+    g.fillStyle=shade(c,fog*1.15);g.beginPath();g.moveTo(bodyX+p*0.5,bodyY+p*1);
+    for(let k=0;k<5;k++){g.lineTo(bodyX+p*(0.2+k*0.5),bodyY+p*(0.2+k*0.2)-p*(1.4-k*0.1));g.lineTo(bodyX+p*(0.7+k*0.5),bodyY+p*(0.6+k*0.2));}
+    g.closePath();g.fill();
+    // clawed forelimb
+    g.fillStyle=shade(shade(c2,0.75),fog);g.fillRect(bodyX+p*0.4,bodyY+p*6,p*1.6,p*2.4);
+    g.fillStyle=shade('#e8e0c0',fog);for(let k=0;k<3;k++)g.fillRect(bodyX+p*(0.4+k*0.5),bodyY+p*8.2,p*0.35,p*1.1);
+    // ===== head =====
+    const hx=x+p*5.5+sway*p*0.6, hy=y-p*0.5+coil;
+    // back frill / crest
+    g.fillStyle=shade(shade(c,0.85),fog);g.beginPath();g.moveTo(hx+p*0.5,hy+p*1);g.lineTo(hx-p*1.6,hy-p*1.2);g.lineTo(hx-p*1.2,hy+p*0.5);g.lineTo(hx-p*2,hy+p*0.6);g.lineTo(hx-p*0.8,hy+p*2.2);g.closePath();g.fill();
+    // skull
+    g.fillStyle=shade(c,fog);g.beginPath();g.ellipse(hx+p*1.4,hy+p*1.6,p*2.6,p*2.0,0,0,Math.PI*2);g.fill();
+    // elongated snout
+    g.fillStyle=shade(c,fog*0.95);g.beginPath();g.moveTo(hx+p*3,hy+p*0.8);g.lineTo(hx+p*5.2,hy+p*1.4);g.lineTo(hx+p*5.2,hy+p*2.2);g.lineTo(hx+p*3,hy+p*2.6);g.closePath();g.fill();
+    // horns (a pair sweeping back)
+    g.fillStyle=shade('#e8dcc0',fog);
+    g.beginPath();g.moveTo(hx+p*0.6,hy);g.lineTo(hx-p*1.8,hy-p*2.4);g.lineTo(hx-p*0.6,hy-p*0.4);g.closePath();g.fill();
+    g.beginPath();g.moveTo(hx+p*1.8,hy-p*0.2);g.lineTo(hx+p*0.4,hy-p*2.8);g.lineTo(hx+p*2.2,hy-p*0.6);g.closePath();g.fill();
+    // jaw + fangs
+    g.fillStyle=shade(shade(c,0.7),fog);g.fillRect(hx+p*3,hy+p*2.4,p*2.2,p*0.9);
+    g.fillStyle='#fff';g.fillRect(hx+p*3.4,hy+p*2.3,p*0.5,p*1.0);g.fillRect(hx+p*4.4,hy+p*2.3,p*0.5,p*1.0);
+    // glowing eye + brow
+    g.fillStyle=shade('#1a1208',fog);g.fillRect(hx+p*1.4,hy+p*0.6,p*1.8,p*0.5);
+    const eg=0.6+0.4*Math.sin(t*4);g.fillStyle='#ffd23a';g.globalAlpha=eg;g.fillRect(hx+p*2.4,hy+p*1.1,p*1.0,p*0.8);g.globalAlpha=1;
+    g.fillStyle='#c00';g.fillRect(hx+p*2.7,hy+p*1.3,p*0.45,p*0.45);
+    // nostril smoke flicker
+    if(Math.sin(t*2)>0.6){g.fillStyle='rgba(220,180,90,0.5)';g.fillRect(hx+p*5,hy+p*1.4,p*0.8,p*0.8);}
+  }
   if(['horse','golem','dryad','wendigo'].includes(shp)){}
   g.restore();
   // directional light + base AO via the prebaked overlay, confined to the mob silhouette
@@ -782,57 +1192,51 @@ function renderHand(){
     const draw=attackHeld?charge:(player.bowAnim>0?player.bowAnim/10:0);
     const wood='#6b4a2b', woodD='#4d3420', woodL='#8a6238', horn=rc, hornL=shade(rc,1.3), str='#e9e2cc', shaft='#d7ccae';
     if(rw.form==='crossbow'){
-      // ===== smooth crossbow: prod arc across the front, stock running back to the viewer =====
-      const cx=W*0.70+bob*0.4;                          // front of the stock (where prod sits)
-      const cy=H*0.50+bob*0.6+switchDip;
-      const reach=W*0.26;                                // stock length back toward lower-right
-      const armH=H*0.34;                                 // half-height of the prod arc
-      const sw=Math.max(7,W*0.018);                      // stock thickness
-      const lw=Math.max(5,W*0.013);                      // prod thickness
-      // direction the stock runs (toward lower-right corner)
-      const ang=0.42;                                    // tilt of the whole weapon
-      const dx=Math.cos(ang), dy=Math.sin(ang);
-      const buttX=cx+dx*reach, buttY=cy+dy*reach;        // butt of the stock (near you)
-      // ---- stock (thick tapered bar from front to butt) ----
+      // ===== crossbow: front portion visible in the lower-right; the butt runs OFF-SCREEN =====
+      // The grip/butt sits past the bottom-right corner (cut off by the frame), so we only see
+      // the front: the prod, the bolt pointing up-left toward the crosshair, and part of the stock.
+      const buttX=W*1.12+bob*0.4, buttY=H*1.18+bob*0.6+switchDip;   // butt OFF-SCREEN past the corner
+      const reach=W*0.46;                                // long stock (front reaches toward center)
+      const armH=H*0.20;                                 // prod half-span (bigger)
+      const sw=Math.max(9,W*0.026);                      // stock thickness (chunkier)
+      const lw=Math.max(6,W*0.016);                      // prod thickness
+      const ang=Math.PI+0.62;                            // up-left toward the crosshair
+      const dx=Math.cos(ang), dy=Math.sin(ang);          // unit vector from butt toward the front
       const perpX=-dy, perpY=dx;
-      const stk=(t0,t1,half,col)=>{ctx.fillStyle=col;ctx.beginPath();
-        ctx.moveTo(cx+dx*reach*t0+perpX*half, cy+dy*reach*t0+perpY*half);
-        ctx.lineTo(cx+dx*reach*t1+perpX*half, cy+dy*reach*t1+perpY*half);
-        ctx.lineTo(cx+dx*reach*t1-perpX*half, cy+dy*reach*t1-perpY*half);
-        ctx.lineTo(cx+dx*reach*t0-perpX*half, cy+dy*reach*t0-perpY*half);
+      const cx=buttX+dx*reach, cy=buttY+dy*reach;        // FRONT of the stock (prod sits here)
+      // ---- stock (thick tapered bar from butt to front) ----
+      const stk=(half,col)=>{ctx.fillStyle=col;ctx.beginPath();
+        ctx.moveTo(buttX+perpX*half, buttY+perpY*half);
+        ctx.lineTo(cx+perpX*half, cy+perpY*half);
+        ctx.lineTo(cx-perpX*half, cy-perpY*half);
+        ctx.lineTo(buttX-perpX*half, buttY-perpY*half);
         ctx.closePath();ctx.fill();};
-      stk(0,1,sw*0.6,wood);                              // main stock
-      stk(0,1,sw*0.6*0.4,woodL);                         // lit centerline (drawn narrower, offset below)
-      // shoulder stock flare at the butt
-      ctx.fillStyle=woodD;ctx.beginPath();ctx.arc(buttX,buttY,sw*0.9,0,Math.PI*2);ctx.fill();
-      // ---- prod: a smooth arc across the front, perpendicular to the stock ----
+      stk(sw*0.55,wood);                                 // main stock
+      stk(sw*0.22,woodL);                                // lit centerline
+      // butt cap
+      ctx.fillStyle=woodD;ctx.beginPath();ctx.arc(buttX,buttY,sw*0.8,0,Math.PI*2);ctx.fill();
+      // ---- prod: a short arc across the front, perpendicular to the stock ----
       const armTopX=cx+perpX*armH, armTopY=cy+perpY*armH;
       const armBotX=cx-perpX*armH, armBotY=cy-perpY*armH;
-      const bowOutX=cx-dx*armH*0.5, bowOutY=cy-dy*armH*0.5;  // arc bows forward
+      const bowOutX=cx+dx*armH*0.5, bowOutY=cy+dy*armH*0.5;   // arc bows forward
       ctx.strokeStyle=horn;ctx.lineWidth=lw;ctx.lineCap='round';
       ctx.beginPath();ctx.moveTo(armTopX,armTopY);ctx.quadraticCurveTo(bowOutX,bowOutY,armBotX,armBotY);ctx.stroke();
       ctx.strokeStyle=hornL;ctx.lineWidth=lw*0.4;
       ctx.beginPath();ctx.moveTo(armTopX,armTopY);ctx.quadraticCurveTo(bowOutX,bowOutY,armBotX,armBotY);ctx.stroke();
-      // ---- string: from the two prod tips back to the latch point (ratchets back when drawn) ----
-      const latchT=0.18+draw*0.34;
-      const latchX=cx+dx*reach*latchT, latchY=cy+dy*reach*latchT;
+      // ---- string: from the two prod tips back to the latch (ratchets back when drawn) ----
+      const latchBack=(0.30+draw*0.34)*reach;            // distance back from the front along the stock
+      const latchX=cx-dx*latchBack, latchY=cy-dy*latchBack;
       ctx.strokeStyle=str;ctx.lineWidth=Math.max(2,W*0.0035);
       ctx.beginPath();ctx.moveTo(armTopX,armTopY);ctx.lineTo(latchX,latchY);ctx.lineTo(armBotX,armBotY);ctx.stroke();
-      // ---- bolt: solid shaft on the rail pointing forward (toward the front of the stock) ----
-      const boltBackT=latchT, boltFrontT=-0.5-draw*0.2;
-      const bbX=cx+dx*reach*boltBackT, bbY=cy+dy*reach*boltBackT;
-      const bfX=cx+dx*reach*boltFrontT, bfY=cy+dy*reach*boltFrontT;
+      // ---- bolt: SHORT shaft on the rail, head pointing forward (up-left) toward the crosshair ----
+      const boltLen=reach*0.5;                           // short — sits on the rail, foreshortened
+      const boltBackX=latchX, boltBackY=latchY;          // tail at the latch (recedes with draw)
+      const boltHeadX=cx+dx*boltLen*0.5, boltHeadY=cy+dy*boltLen*0.5;   // head just past the prod
       ctx.strokeStyle=shaft;ctx.lineWidth=Math.max(3,W*0.006);
-      ctx.beginPath();ctx.moveTo(bfX,bfY);ctx.lineTo(bbX,bbY);ctx.stroke();
-      // bolt head
-      ctx.fillStyle='#dfe6ea';ctx.save();ctx.translate(bfX,bfY);ctx.rotate(Math.atan2(bfY-bbY,bfX-bbX));ctx.beginPath();ctx.moveTo(lw*1.0,0);ctx.lineTo(-lw*0.4,-lw*0.7);ctx.lineTo(-lw*0.4,lw*0.7);ctx.closePath();ctx.fill();ctx.restore();
-      // ---- trigger guard nub under the stock ----
-      const trigT=0.55;const trigX=cx+dx*reach*trigT+perpX*sw*0.7, trigY=cy+dy*reach*trigT+perpY*sw*0.7;
-      ctx.fillStyle=woodD;ctx.beginPath();ctx.arc(trigX,trigY,sw*0.5,0,Math.PI*2);ctx.fill();
-      // ---- hand on the grip near the butt ----
-      const hs=Math.max(8,W*0.02);
-      ctx.fillStyle='#caa46a';ctx.beginPath();ctx.arc(buttX-dx*sw*0.4,buttY-dy*sw*0.4,hs,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle=shade('#caa46a',1.12);ctx.beginPath();ctx.arc(buttX-dx*sw*0.4,buttY-dy*sw*0.4,hs,Math.PI*0.1,Math.PI*0.9);ctx.fill();
+      ctx.beginPath();ctx.moveTo(boltHeadX,boltHeadY);ctx.lineTo(boltBackX,boltBackY);ctx.stroke();
+      // bolt head (points forward, up-left)
+      ctx.fillStyle='#dfe6ea';ctx.save();ctx.translate(boltHeadX,boltHeadY);ctx.rotate(Math.atan2(dy,dx));ctx.beginPath();ctx.moveTo(lw*1.0,0);ctx.lineTo(-lw*0.4,-lw*0.7);ctx.lineTo(-lw*0.4,lw*0.7);ctx.closePath();ctx.fill();ctx.restore();
+      // (no hand/trigger drawn — the grip and butt run off-screen past the lower-right corner)
       return;
     }
     // ===== BOW: tall & upright on the RIGHT edge, arrow lies horizontal pointing LEFT to the crosshair =====
@@ -891,7 +1295,7 @@ function renderHand(){
   const swingLift=Math.abs(Math.sin(swing))*H*0.18, chargeLift=windup*H*0.10;
   const sideTravel=Math.sin(swing)*slashDir*W*0.07 - windup*W*0.05;   // pull back-right during windup
   let baseY=H-H*0.06-swingLift-chargeLift+bob+switchDip;
-  let x=W*0.58+sideTravel, w=W*0.24, h=H*0.60;          // LARGER weapon
+  let x=W*0.58+sideTravel, w=W*0.27, h=H*0.68;          // LARGER weapon
   if(player.dodgeT>0)baseY+=H*0.08;
   const col=eq?RC[eq.rarity]:'#c8c8c8';
   const colL=shade(col,1.35), colD=shade(col,0.6);
@@ -1075,7 +1479,7 @@ function releaseAction(){
 function hurtPlayer(raw,opts){opts=opts||{};const D=derived();
   if(player.dodgeT>14){addFloater(player.x+Math.cos(player.ang),player.y+Math.sin(player.ang),'dodge','#9ee6ff');return;}
   if(Math.random()<D.dodge){addFloater(player.x+Math.cos(player.ang),player.y+Math.sin(player.ang),'evade','#9ee6ff');return;}
-  let dmg=raw,parried=false;
+  let dmg=raw*1.45,parried=false;   // mobs hit harder
   if(dmg>0){player.hp-=dmg;damageFlash=Math.max(damageFlash,10);shake=Math.max(shake,opts.heavy?6:3);addFloater(player.x+Math.cos(player.ang)*0.6,player.y+Math.sin(player.ang)*0.6,'-'+Math.round(dmg),'#ff7a5a');if(player.hp<=0){player.hp=0;endQuest(false);}}
   return parried;}
 function meleeHit(e){if(e.atkCool<=0){e.atkCool=45;e.lunge=10;hurtPlayer(e.def.dmg,{srcX:e.x,srcY:e.y,heavy:e.def.dmg>=14});}if(e.atkCool>0)e.atkCool--;}
@@ -1169,15 +1573,16 @@ function onKill(e){game.xp+=e.xpScaled;quest.killed++;const D=derived();
   showToast('Slain: '+e.def.name+'  +'+e.xpScaled+' XP','#b3a984');checkLevel();if(quest.killed>=quest.total)endQuest(true);}
 function checkLevel(){const need=game.level*120;if(game.xp>=need){game.xp-=need;game.level++;const D=derived();player.maxhp=D.maxhp;player.hp=player.maxhp;showToast('LEVEL UP — Lv '+game.level,'#e0b13c');}}
 function startQuest(){const sc=logScore();const streak=streakCount();const t=tierFor(sc.pct,streak);const D=derived();
-  buildForest(Math.min(40,10+t.idx*6));
+  curBiome=t.biome||'forest';
+  buildForest(Math.min(48,10+t.idx*5));
   player.x=MAP_S/2;player.y=MAP_S/2;player.ang=0;player.combo=0;player.comboT=0;player.blocking=false;player.blockT=0;player.dodgeT=0;player.stamina=player.maxstam=100;player.regenAcc=0;
   attackHeld=false;attackHeldFrames=0;particles=[];floaters=[];thrown=[];pArrows=[];pickups=[];shake=0;hitstop=0;parryFlash=0;slashArc=0;player.bowCool=0;player.bowAnim=0;player.switchAnim=0;
   if(!modeAvailable(weaponMode))weaponMode='melee';
   player.maxhp=D.maxhp;player.hp=player.maxhp;player.cool=0;
   enemies=[];projectiles=[];motes=[];for(let i=0;i<50;i++)motes.push({x:2+Math.random()*(MAP_S-4),y:2+Math.random()*(MAP_S-4),h:0.1+Math.random()*0.35,ph:Math.random()*6});
-  const count=Math.max(2,Math.min(18,Math.round(sc.done*1.3)+Math.max(0,t.idx-3)*2+1));
+  const count=Math.max(2,Math.min(24,Math.round(sc.done*1.3)+Math.max(0,t.idx-3)*2+1));
   const pool=MOBS.filter(m=>m.minTier<=t.idx&&!m.boss);const hasBoss=t.idx>=4;
-  const sBuff=1+Math.min(1.4,streak*0.05)+Math.max(0,t.idx-4)*0.25;   // tougher mobs at higher tiers
+  const sBuff=1+Math.min(1.4,streak*0.05)+Math.max(0,t.idx-4)*0.28;   // tougher mobs at higher tiers
   for(let i=0;i<count;i++){let def;if(hasBoss&&i===count-1)def=MOBS.find(m=>m.boss);else def=pool[Math.random()*pool.length|0];
     let ex,ey,g=0;do{ex=2+Math.random()*(MAP_S-4);ey=2+Math.random()*(MAP_S-4);g++;}while(g<50&&(Math.hypot(ex-player.x,ey-player.y)<4||map[ey|0][ex|0]||treeBlocked(ex,ey)));
     enemies.push({def,x:ex,y:ey,hp:Math.round(def.hp*sBuff),maxhp:Math.round(def.hp*sBuff),xpScaled:Math.round(def.xp*sBuff),alive:true,hurt:0,flinch:0,lunge:0,atkCool:30+Math.random()*30|0,castCool:60+Math.random()*40|0,healCool:120,windup:0,charging:false,chargeT:0,diving:false,diveT:0,shieldT:0,shieldCool:120,armorT:0,enraged:false,phase:Math.random()*6,seed:Math.random()*6});}
@@ -1193,8 +1598,24 @@ function endQuest(won){running=false;document.getElementById('hud').classList.ad
       const cell=document.createElement('div');cell.className='inv-cell b-'+l.rarity;cell.appendChild(makeIcon(l));cell.insertAdjacentHTML('beforeend','<div class="inv-name r-'+l.rarity+'">'+l.name+'</div><div class="inv-meta">'+statSummary(l)+'</div>');grid.appendChild(cell);}
     // throwable restock + harvest bonus
     const restock=1+(Math.random()<0.5?1:0);game.throwables.dagger=(game.throwables.dagger||0)+restock;if(Math.random()<0.4)game.throwables.bomb=(game.throwables.bomb||0)+1;
+    // ✦ rare mythic alien skin drop — now much rarer, scales a little with tier, only awards a locked one
+    const lockedAlien=SKINS.filter(s=>s.unlock==='mythic'&&!(game.skinsUnlocked||[]).includes(s.id));
+    if(lockedAlien.length){const dropChance=0.006+quest.tier.idx*0.003+(quest.boss?0.02:0);
+      if(Math.random()<dropChance){const got=lockedAlien[Math.random()*lockedAlien.length|0];game.skinsUnlocked.push(got.id);
+        box.insertAdjacentHTML('beforeend','<div class="tier-readout" style="margin-top:0.6rem;border-color:'+got.glow+';color:'+got.glow+'">✦ ALIEN RELIC-SKIN UNLOCKED: <b>'+got.name+'</b><br><span class="tiny">Choose it at the start screen on your next run.</span></div>');}}
     sub.textContent='You cleared all '+quest.total+' foes of the '+quest.tier.name.replace(' — APEX HUNT','')+'. Streak, tier, and luck sharpened your spoils. Throwables restocked.';
     if(quest.streak>game.bestStreak)game.bestStreak=quest.streak;
+    // 🥚 "becomemoho" easter egg — checked-off vow + a win = the entire armory
+    if(mohoVowChecked()){
+      let added=0;for(const it of LOOT){if(!game.loot.includes(it.id)){game.loot.push(it.id);added++;}}
+      game.skinsUnlocked=SKINS.filter(s=>s.unlock==='mythic').map(s=>s.id);   // all alien skins too
+      // auto-equip the best item in each slot
+      const score=v=>v?Object.values(v.stats||{}).reduce((a,b)=>a+Math.abs(b),0):0;
+      for(const slot of ['weapon','ranged','armor','helm','trinket']){
+        let best=null;for(const it of LOOT){if(it.slot===slot&&(!best||score(it)>score(best)))best=it;}
+        if(best)game.equip[slot]=best.id;}
+      box.insertAdjacentHTML('beforeend','<div class="tier-readout" style="margin-top:0.6rem;border-color:#ff5ad0;color:#ff5ad0">🥚 MOHO ASCENDS — the entire armory ('+added+' relics) and every alien skin are yours.</div>');
+    }
   }else{title.textContent='You Fell in the Wood';title.className='';sub.textContent='Overcome after felling '+quest.killed+' of '+quest.total+'. Your XP and spoils endure — mend, and march again.';}
   saveGame();document.getElementById('resultPanel').classList.remove('hidden');}
 function statSummary(l){if(!l.stats)return'';return Object.entries(l.stats).map(([k,v])=>(v>0?'+':'')+v+(k==='vit'||k==='dmg'||k==='rdmg'||k==='regen'?'':'%')+' '+k).slice(0,3).join(', ');}
@@ -1310,7 +1731,8 @@ function updateHUD(){const need=game.level*120;
 let toastTimer;function showToast(t,c){const el=document.getElementById('toast');el.innerHTML='<span style="color:'+(c||'#fff')+'">'+t+'</span>';el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),1300);}
 
 /* ============ PANELS ============ */
-function hidePanels(){['welcome','logPanel','resultPanel','invPanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));}
+function hidePanels(){['welcome','charSelect','logPanel','resultPanel','invPanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));}
+function showCharSelect(){hidePanels();document.getElementById('hud').classList.add('hidden');document.getElementById('charSelect').classList.remove('hidden');drawSkinPreview();}
 function showWelcome(){hidePanels();document.getElementById('hud').classList.add('hidden');
   document.getElementById('welLevel').textContent='Lv '+game.level;document.getElementById('welStreak').textContent=streakCount()+' days';document.getElementById('welLoot').textContent=game.loot.length;
   document.getElementById('welHint').innerHTML=noTouch?'<kbd>WASD</kbd> move · <kbd>mouse</kbd> look · <kbd>F</kbd> switch weapon (melee/bow/throw) · hold click to wind up, release to strike/fire/throw · <kbd>C</kbd> dodge':'left stick move · drag to look · 🔄 switch weapon · hold ⚔ to wind up, release to act · 💨 dodge';
@@ -1328,10 +1750,10 @@ function renderLog(){const list=document.getElementById('logList');const empty=d
       row.append(tick,lab,typ,del);list.appendChild(row);});});
   updateMeter();}
 function addGoal(type){ensureTracker();const inp=document.getElementById('newGoalInput');const label=inp.value.trim();if(!label)return;if(!tracker.items.custom)tracker.items.custom=[];tracker.items.custom.push({label,target:'',value:'',type});inp.value='';saveTracker();renderLog();}
-function updateMeter(){const sc=logScore();const streak=streakCount();const t=tierFor(sc.pct,streak);document.getElementById('meterPct').textContent=Math.round(sc.pct*100)+'%';document.getElementById('meterFill').style.width=(sc.pct*100)+'%';const tr=document.getElementById('tierReadout');if(sc.total===0)tr.innerHTML='Add vows to set difficulty — practice hunt is <b>Sunlit Clearing</b>';else{let extra='';if(sc.pct>=1){const nx=streak<7?'7-day streak → Blighted Reach':streak<14?'14-day streak → Ashen Hollow':streak<21?'21-day streak → Nightmare':'max tier reached';extra='<br><span class="tiny" style="color:var(--gold)">🔥 '+streak+'-day streak · '+nx+'</span>';}tr.innerHTML='Difficulty: <b style="color:'+t.col+'">'+t.name+'</b><br><span class="tiny">'+sc.done+' of '+sc.total+' vows · tougher hunts drop richer loot</span>'+extra;}}
+function updateMeter(){const sc=logScore();const streak=streakCount();const t=tierFor(sc.pct,streak);document.getElementById('meterPct').textContent=Math.round(sc.pct*100)+'%';document.getElementById('meterFill').style.width=(sc.pct*100)+'%';const tr=document.getElementById('tierReadout');if(sc.total===0)tr.innerHTML='Add vows to set difficulty — practice hunt is <b>Sunlit Clearing</b>';else{let extra='';if(sc.pct>=1){const nx=streak<1?'1-day streak → Blighted Tundra (frost)':streak<2?'2-day streak → Frozen Reach':streak<3?'3-day streak → Ashen Hollow':streak<4?'4-day streak → Nightmare (volcanic)':streak<5?'5-day streak → Cinder Wastes':streak<6?'6-day streak → Magma Vault':streak<7?'7-day streak → THE ABYSS':'max tier reached';extra='<br><span class="tiny" style="color:var(--gold)">🔥 '+streak+'-day streak · '+nx+'</span>';}tr.innerHTML='Difficulty: <b style="color:'+t.col+'">'+t.name+'</b><br><span class="tiny">'+sc.done+' of '+sc.total+' vows · tougher hunts drop richer loot</span>'+extra;}}
 
 /* inventory */
-let invTab='gear',invSlot='weapon',dollAngle=0,selItem=null;
+let invTab='gear',invSlot='weapon',dollAngle=0.2,selItem=null;
 function showInv(){hidePanels();document.getElementById('hud').classList.add('hidden');setInvTab('gear');document.getElementById('invPanel').classList.remove('hidden');}
 function setInvTab(t){invTab=t;document.getElementById('tabGear').classList.toggle('active',t==='gear');document.getElementById('tabForge').classList.toggle('active',t==='forge');document.getElementById('tabStats').classList.toggle('active',t==='stats');
   document.getElementById('gearView').style.display=t==='gear'?'':'none';document.getElementById('forgeView').style.display=t==='forge'?'':'none';document.getElementById('statsView').style.display=t==='stats'?'':'none';
@@ -1378,38 +1800,160 @@ function renderStats(){const t=aggStats();const D=derived();const list=document.
   list.innerHTML='<p class="sub">Your equipped relics combine into these stats. Mix gear to specialize.</p>'+rows.map(([n,v,c])=>'<div class="stat-line"><span>'+n+'</span><b style="color:'+c+'">'+v+'</b></div>').join('');}
 
 /* paper-doll */
-function drawDoll(){const cv=document.getElementById('dollCanvas'),x=cv.getContext('2d'),W2=cv.width,H2=cv.height;x.imageSmoothingEnabled=false;x.clearRect(0,0,W2,H2);
-  const wp=game.equip.weapon?lootById(game.equip.weapon):null,ar=game.equip.armor?lootById(game.equip.armor):null,hl=game.equip.helm?lootById(game.equip.helm):null,tr=game.equip.trinket?lootById(game.equip.trinket):null;
-  const rngE=game.equip.ranged?lootById(game.equip.ranged):null;
-  let topR=-1;[wp,rngE,ar,hl,tr].forEach(it=>{if(it)topR=Math.max(topR,rarityIdx(it.rarity));});
-  const cx=W2/2,p=7,t=frame*0.05;
+/* ===== character skin preview on the welcome screen ===== */
+let skinBrowse=0;
+function drawHeroBody(x,W2,H2,sk,opts){
+  // shared body renderer for the skin preview and the paperdoll base.
+  opts=opts||{};const p=opts.p||7;const t=frame*0.05;const cx=W2/2;
+  const yaw=Math.sin(opts.angle||0),facing=yaw>=0?1:-1,sideShade=1-Math.abs(yaw)*0.35;
+  const bob=Math.sin(t*1.5)*2,topY=(opts.topY||46)+bob;const sh=(hex,f)=>shade(hex,f);
+  const bodyCol=opts.bodyCol||sk.body;          // doll passes the equipped armor color here
+  // alien glow aura
+  if(sk.alien){for(let r=0;r<3;r++){x.globalAlpha=0.10+0.06*Math.sin(t*3+r);x.fillStyle=sk.glow;const rad=p*4.5+r*5+Math.sin(t*2)*2;x.beginPath();x.arc(cx,H2/2,rad,0,7);x.fill();}x.globalAlpha=1;
+    for(let i=0;i<7;i++){const a=t*2+i;x.fillStyle=sk.glow;x.globalAlpha=0.4+0.5*Math.sin(t*4+i);x.fillRect(cx+Math.cos(a)*p*5,H2/2+Math.sin(a)*p*7,3,3);}x.globalAlpha=1;}
+  // shadow
   x.fillStyle='rgba(0,0,0,0.35)';x.fillRect(cx-p*3,H2-26,p*6,8);
-  if(topR>=3){const auraCol=topR>=4?'#e0b13c':'#a86fc0';for(let r=0;r<3;r++){x.globalAlpha=0.12+0.06*Math.sin(t*3+r);x.fillStyle=auraCol;const rad=p*4.5+r*4+Math.sin(t*2)*2;x.beginPath();x.arc(cx,H2/2,rad,0,7);x.fill();}x.globalAlpha=1;for(let i=0;i<6;i++){const a=t*2+i;x.fillStyle=auraCol;x.globalAlpha=0.5+0.5*Math.sin(t*4+i);x.fillRect(cx+Math.cos(a)*p*5,H2/2+Math.sin(a)*p*7,3,3);}x.globalAlpha=1;}
-  const yaw=Math.sin(dollAngle),facing=yaw>=0?1:-1,sideShade=1-Math.abs(yaw)*0.35,bob=Math.sin(t*1.5)*2,topY=46+bob;
-  const sh2=(hex,f)=>shade(hex,f);
-  x.fillStyle=sh2('#3a2d1d',sideShade);x.fillRect(cx-p*1.6,topY+p*9,p*1.4,p*4);x.fillRect(cx+p*0.2,topY+p*9,p*1.4,p*4);
-  const armorCol=ar?ar.c:'#7a6a52';x.fillStyle=sh2(armorCol,sideShade);x.fillRect(cx-p*2,topY+p*3,p*4,p*6.5);x.fillStyle=sh2(armorCol,sideShade*1.2);x.fillRect(cx-p*2,topY+p*3,p*4,p*1.3);
-  if(ar&&ar.form==='scale'){x.fillStyle=sh2(armorCol,sideShade*0.7);for(let r=0;r<3;r++)for(let cc=0;cc<3;cc++)x.fillRect(cx-p*1.6+cc*p*1.2,topY+p*4+r*p*1.4,p,p);}
-  if(ar&&ar.form==='plate'){x.fillStyle=sh2(armorCol,sideShade*1.3);x.fillRect(cx-p*0.4,topY+p*3.2,p*0.8,p*6);}
-  x.fillStyle=sh2(armorCol,sideShade*0.85);x.fillRect(cx-p*3,topY+p*3.4,p*1,p*5);x.fillRect(cx+p*2,topY+p*3.4,p*1,p*5);
-  x.fillStyle=sh2('#caa46a',sideShade);x.fillRect(cx-p*1.4,topY,p*2.8,p*3);
-  x.fillStyle='#2a2018';if(Math.abs(yaw)<0.7){const ex=cx-p*0.7+facing*p*0.3;x.fillRect(ex,topY+p*1.2,p*0.5,p*0.6);x.fillRect(ex+p*1.1,topY+p*1.2,p*0.5,p*0.6);}
+  // legs
+  x.fillStyle=sh('#3a2d1d',sideShade);x.fillRect(cx-p*1.6,topY+p*9,p*1.4,p*4);x.fillRect(cx+p*0.2,topY+p*9,p*1.4,p*4);
+  // torso (body / armor color)
+  x.fillStyle=sh(bodyCol,sideShade);x.fillRect(cx-p*2,topY+p*3,p*4,p*6.5);
+  x.fillStyle=sh(bodyCol,sideShade*1.2);x.fillRect(cx-p*2,topY+p*3,p*4,p*1.3);
+  // armor surface detail (doll passes armorForm)
+  if(opts.armorForm==='scale'){x.fillStyle=sh(bodyCol,sideShade*0.7);for(let r=0;r<3;r++)for(let cc=0;cc<3;cc++)x.fillRect(cx-p*1.6+cc*p*1.2,topY+p*4+r*p*1.4,p,p);}
+  if(opts.armorForm==='plate'){x.fillStyle=sh(bodyCol,sideShade*1.3);x.fillRect(cx-p*0.4,topY+p*3.2,p*0.8,p*6);}
+  // arms
+  x.fillStyle=sh(bodyCol,sideShade*0.85);x.fillRect(cx-p*3,topY+p*3.4,p*1,p*5);x.fillRect(cx+p*2,topY+p*3.4,p*1,p*5);
+  // hands (skin)
+  x.fillStyle=sh(sk.skin,sideShade);x.fillRect(cx-p*3,topY+p*8,p*1,p*1.4);x.fillRect(cx+p*2,topY+p*8,p*1,p*1.4);
+  // ---- torso detail features (per-skin) ----
+  const F=sk.feat||{};
+  const acc=F.accent||sh(bodyCol,sideShade*1.4), trim=F.trim||sh(sk.hair,sideShade);
+  // belt
+  x.fillStyle=sh(F.belt||'#3a2d1d',sideShade);x.fillRect(cx-p*2,topY+p*7.2,p*4,p*1.1);
+  if(F.buckle){x.fillStyle=sh(F.buckle,sideShade*1.2);x.fillRect(cx-p*0.5,topY+p*7.3,p*1,p*0.9);}
+  // chest emblem / pattern
+  if(F.emblem==='diamond'){x.fillStyle=sh(acc,sideShade);x.beginPath();x.moveTo(cx,topY+p*3.6);x.lineTo(cx+p*1,topY+p*5);x.lineTo(cx,topY+p*6.4);x.lineTo(cx-p*1,topY+p*5);x.closePath();x.fill();}
+  else if(F.emblem==='stripe'){x.fillStyle=sh(acc,sideShade);x.fillRect(cx-p*0.4,topY+p*3.2,p*0.8,p*6);}
+  else if(F.emblem==='cross'){x.fillStyle=sh(acc,sideShade);x.fillRect(cx-p*0.4,topY+p*3.6,p*0.8,p*5);x.fillRect(cx-p*1.3,topY+p*4.8,p*2.6,p*0.8);}
+  else if(F.emblem==='scales'){x.fillStyle=sh(acc,sideShade*0.8);for(let r=0;r<3;r++)for(let c=0;c<3;c++)x.fillRect(cx-p*1.5+c*p*1.1,topY+p*3.6+r*p*1.3,p*0.9,p*0.9);}
+  else if(F.emblem==='runes'){x.fillStyle=F.glowEmblem?acc:sh(acc,sideShade);for(let i=0;i<3;i++){const gy=topY+p*4+i*p*1.4;x.fillRect(cx-p*0.8,gy,p*0.5,p*0.5);x.fillRect(cx+p*0.4,gy+p*0.3,p*0.5,p*0.5);}}
+  // shoulder pads
+  if(F.pads){x.fillStyle=sh(acc,sideShade*1.1);x.fillRect(cx-p*2.4,topY+p*2.8,p*1.3,p*1.6);x.fillRect(cx+p*1.1,topY+p*2.8,p*1.3,p*1.6);}
+  // sash / cape over one shoulder
+  if(F.sash){x.fillStyle=sh(acc,sideShade);x.beginPath();x.moveTo(cx-p*1.8,topY+p*3);x.lineTo(cx+p*0.4,topY+p*3);x.lineTo(cx-p*0.8,topY+p*8);x.lineTo(cx-p*2,topY+p*8);x.closePath();x.fill();}
+  // arms
+  x.fillStyle=sh(sk.body,sideShade*0.85);x.fillRect(cx-p*3,topY+p*3.4,p*1,p*5);x.fillRect(cx+p*2,topY+p*3.4,p*1,p*5);
+  // bracers
+  if(F.bracers){x.fillStyle=sh(acc,sideShade);x.fillRect(cx-p*3.05,topY+p*6.6,p*1.1,p*1.4);x.fillRect(cx+p*1.95,topY+p*6.6,p*1.1,p*1.4);}
+  // head (skin)
+  x.fillStyle=sh(sk.skin,sideShade);x.fillRect(cx-p*1.4,topY,p*2.8,p*3);
+  // ---- face markings (alien/unique) ----
+  if(F.faceMark==='warpaint'){x.fillStyle=sh(F.markCol||acc,sideShade);x.fillRect(cx-p*1.4,topY+p*1.0,p*2.8,p*0.35);}
+  else if(F.faceMark==='dots'){x.fillStyle=F.glowEmblem?sk.glow:sh(F.markCol||acc,sideShade);x.fillRect(cx-p*1.0,topY+p*0.6,p*0.4,p*0.4);x.fillRect(cx+p*0.6,topY+p*0.6,p*0.4,p*0.4);}
+  else if(F.faceMark==='visor'){x.fillStyle=sk.glow||sh(acc,sideShade);x.globalAlpha=0.8;x.fillRect(cx-p*1.4,topY+p*1.1,p*2.8,p*0.7);x.globalAlpha=1;}
+  // ---- hair styles ----
+  const hairC=sh(sk.hair,sideShade);
+  if(F.hair==='long'){x.fillStyle=hairC;x.fillRect(cx-p*1.6,topY-p*0.5,p*3.2,p*1.2);x.fillRect(cx-p*1.7,topY,p*0.7,p*3.2);x.fillRect(cx+p*1,topY,p*0.7,p*3.2);}
+  else if(F.hair==='mohawk'){x.fillStyle=hairC;x.fillRect(cx-p*0.4,topY-p*1.6,p*0.8,p*1.6);x.fillRect(cx-p*1.5,topY-p*0.3,p*3,p*0.8);}
+  else if(F.hair==='bald'){/* no hair */}
+  else if(F.hair==='topknot'){x.fillStyle=hairC;x.fillRect(cx-p*1.5,topY-p*0.3,p*3,p*0.8);x.fillRect(cx-p*0.45,topY-p*1.3,p*0.9,p*1.1);}
+  else if(F.hair==='flow'){x.fillStyle=hairC;x.fillRect(cx-p*1.6,topY-p*0.6,p*3.2,p*1.3);x.fillRect(cx-p*1.7,topY,p*0.6,p*2);x.fillRect(cx+p*1.1,topY,p*0.6,p*2);}
+  else {x.fillStyle=hairC;x.fillRect(cx-p*1.5,topY-p*0.5,p*3,p*1.1);}  // default cap
+  // ---- headgear / horns / crown ----
+  if(F.horns){x.fillStyle=sh(F.hornCol||'#d8d0c0',sideShade);x.fillRect(cx-p*1.8,topY-p*1.6,p*0.6,p*1.8);x.fillRect(cx-p*2.1,topY-p*2.2,p*0.6,p*0.9);x.fillRect(cx+p*1.2,topY-p*1.6,p*0.6,p*1.8);x.fillRect(cx+p*1.5,topY-p*2.2,p*0.6,p*0.9);}
+  if(F.crown){x.fillStyle=sh(F.crownCol||'#e0b13c',sideShade);x.fillRect(cx-p*1.5,topY-p*1.1,p*3,p*0.7);for(let k=0;k<3;k++)x.fillRect(cx-p*1.2+k*p*1.1,topY-p*1.7,p*0.5,p*0.7);}
+  if(F.antenna){x.fillStyle=sk.glow;x.fillRect(cx-p*0.8,topY-p*1.8,p*0.3,p*1.6);x.fillRect(cx+p*0.5,topY-p*1.8,p*0.3,p*1.6);x.fillRect(cx-p*0.9,topY-p*2.1,p*0.5,p*0.5);x.fillRect(cx+p*0.4,topY-p*2.1,p*0.5,p*0.5);}
+  // eyes
+  if(sk.alien){x.fillStyle=sk.glow;}else{x.fillStyle='#2a2018';}
+  if(Math.abs(yaw)<0.7){const ex=cx-p*0.7+facing*p*0.3;
+    if(F.eyes==='wide'){x.fillRect(ex-p*0.1,topY+p*1.2,p*0.7,p*0.8);x.fillRect(ex+p*1.0,topY+p*1.2,p*0.7,p*0.8);}
+    else{x.fillRect(ex,topY+p*1.3,p*0.5,p*0.6);x.fillRect(ex+p*1.1,topY+p*1.3,p*0.5,p*0.6);}}
+  return {cx,topY,p,facing,sideShade,sh};
+}
+function drawSkinPreview(){
+  const sk=SKINS[skinBrowse];const cv=document.getElementById('skinCanvas');if(!cv)return;
+  const x=cv.getContext('2d'),W2=cv.width,H2=cv.height;x.imageSmoothingEnabled=false;x.clearRect(0,0,W2,H2);
+  const unlocked=skinUnlocked(sk);
+  if(!unlocked)x.globalAlpha=0.32;
+  drawHeroBody(x,W2,H2,sk,{angle:Math.sin(frame*0.02)*0.6,p:Math.round(W2/22),topY:H2*0.16});
+  x.globalAlpha=1;
+  document.getElementById('skinName').textContent=sk.name+(sk.alien?' ✦':'');
+  const counter=document.getElementById('skinCounter');if(counter){const unlockedCount=SKINS.filter(skinUnlocked).length;counter.textContent='Warrior '+(skinBrowse+1)+' / '+SKINS.length+' · '+unlockedCount+' unlocked';}
+  const beginB=document.getElementById('beginBtn');if(beginB){beginB.disabled=!unlocked;beginB.textContent=unlocked?'Begin the Journey':'🔒 Locked Warrior';}
+  const note=document.getElementById('skinLockNote');const sel=document.getElementById('skinName');
+  if(unlocked){
+    note.innerHTML=game.skin===sk.id?'<span style="color:var(--moss)">✓ This warrior is ready</span>':'<span style="color:#9a8f6f">Unlocked</span>';
+    sel.style.color=sk.alien?sk.glow:'var(--gold)';
+  }else{
+    let req='';if(sk.unlock&&sk.unlock.level)req='Reach Warrior Lv '+sk.unlock.level;else if(sk.unlock==='mythic')req='✦ Mythic drop — find it in the hunt';
+    note.innerHTML='<span style="color:#8a6a4a">🔒 '+req+'</span>';
+    sel.style.color='#8a7a5a';
+  }
+}
+function browseSkin(dir){
+  const n=SKINS.length;skinBrowse=(skinBrowse+dir+n)%n;
+  drawSkinPreview();
+}
+// Cycle the ACTIVE skin among unlocked ones from the gear screen (changes game.skin live).
+function cycleEquippedSkin(dir){
+  const unlocked=SKINS.filter(skinUnlocked);
+  if(!unlocked.length)return;
+  let i=unlocked.findIndex(s=>s.id===game.skin);if(i<0)i=0;
+  i=(i+dir+unlocked.length)%unlocked.length;
+  game.skin=unlocked[i].id;saveGame();drawDoll();
+}
+function skinPreviewTick(){if(!document.getElementById('charSelect').classList.contains('hidden'))drawSkinPreview();requestAnimationFrame(skinPreviewTick);}
+
+function drawDoll(){const cv=document.getElementById('dollCanvas'),x=cv.getContext('2d'),W2=cv.width,H2=cv.height;x.imageSmoothingEnabled=false;x.clearRect(0,0,W2,H2);
+  const sk=skinById(game.skin);
+  const wp=game.equip.weapon?lootById(game.equip.weapon):null,ar=game.equip.armor?lootById(game.equip.armor):null,hl=game.equip.helm?lootById(game.equip.helm):null,tr=game.equip.trinket?lootById(game.equip.trinket):null;
+  const rng=game.equip.ranged?lootById(game.equip.ranged):null;
+  let topR=-1;[wp,rng,ar,hl,tr].forEach(it=>{if(it)topR=Math.max(topR,rarityIdx(it.rarity));});
+  const cx=W2/2,p=Math.round(W2/24),t=frame*0.05;
+  // gear aura (separate from alien skin glow)
+  if(topR>=3&&!sk.alien){const auraCol=topR>=4?'#e0b13c':'#a86fc0';for(let r=0;r<3;r++){x.globalAlpha=0.12+0.06*Math.sin(t*3+r);x.fillStyle=auraCol;const rad=p*4.5+r*4+Math.sin(t*2)*2;x.beginPath();x.arc(cx,H2/2,rad,0,7);x.fill();}x.globalAlpha=1;for(let i=0;i<6;i++){const a=t*2+i;x.fillStyle=auraCol;x.globalAlpha=0.5+0.5*Math.sin(t*4+i);x.fillRect(cx+Math.cos(a)*p*5,H2/2+Math.sin(a)*p*7,3,3);}x.globalAlpha=1;}
+  // shared body with ALL skin features; torso takes the equipped armor color if any
+  const base=drawHeroBody(x,W2,H2,sk,{angle:dollAngle,p:p,topY:H2*0.19,bodyCol:ar?ar.c:sk.body,armorForm:ar?ar.form:null});
+  const sideShade=base.sideShade,facing=base.facing,topY=base.topY,sh2=base.sh;
+  // ---- equipped helm renders over the skin's own headgear ----
   if(hl){const hc=hl.c;x.fillStyle=sh2(hc,sideShade);x.fillRect(cx-p*1.6,topY-p*0.6,p*3.2,p*1.8);
     if(hl.form==='antler'){x.fillStyle=sh2('#c0a060',sideShade);x.fillRect(cx-p*2,topY-p*3,p*0.6,p*3);x.fillRect(cx-p*2.6,topY-p*3,p*1.2,p*0.6);x.fillRect(cx+p*1.4,topY-p*3,p*0.6,p*3);x.fillRect(cx+p*1.4,topY-p*3,p*1.2,p*0.6);}
     if(hl.form==='horned'||hl.form==='crown'){x.fillStyle=sh2(hc,sideShade*1.3);x.fillRect(cx-p*1.9,topY-p*2,p*0.7,p*2);x.fillRect(cx+p*1.2,topY-p*2,p*0.7,p*2);}
     if(hl.form==='crown'){x.fillStyle='#c1543a';x.fillRect(cx-p*0.4,topY-p*0.4,p*0.8,p*0.8);}
     if(hl.form==='helm'){x.fillStyle=sh2(hc,sideShade*0.6);x.fillRect(cx-p*0.3,topY-p*0.2,p*0.6,p*1.6);}}
+  // ---- equipped melee weapon in hand ----
   if(wp){const wc=wp.c,hx=cx+facing*p*2.6;
     if(wp.form==='axe'){x.fillStyle='#3a2d1d';x.fillRect(hx-p*0.3,topY+p*1,p*0.7,p*8);x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-facing*p*1.5,topY+p*1,p*2,p*2.5);}
     else if(wp.form==='club'){x.fillStyle='#3a2d1d';x.fillRect(hx-p*0.3,topY+p*3,p*0.7,p*6);x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-p*1.2,topY+p*0.5,p*2.4,p*3);}
     else if(wp.form==='spear'){x.fillStyle='#5a4a30';x.fillRect(hx-p*0.2,topY-p*2,p*0.5,p*12);x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-p*0.5,topY-p*3,p*1.1,p*2);}
     else{x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-p*0.3,topY-p*1,p*0.8,p*7);x.fillStyle='#5a4a30';x.fillRect(hx-p*0.8,topY+p*5.5,p*1.8,p*0.8);}}
-  const rng=game.equip.ranged?lootById(game.equip.ranged):null;
+  // ---- equipped ranged weapon in the other hand ----
   if(rng){const rc=rng.c,bx=cx-facing*p*2.0;
-    if(rng.form==='crossbow'){x.fillStyle=sh2('#4a3a26',sideShade*0.8);x.fillRect(bx-p*0.4,topY+p*1,p*0.8,p*6);x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.7;x.beginPath();x.arc(bx,topY+p*2,p*1.8,-1.2,1.2);x.stroke();}
+    if(rng.form==='crossbow'){
+      // held upright, FLIPPED: prod arc + bolt point DOWN; grip sits at the hand (topY+p*8)
+      const bx2=bx;                                      // beside the body
+      const top=topY+p*6;                                // stock top near the hand
+      const btm=top+p*5;                                 // short stock running down
+      // vertical stock (short)
+      x.fillStyle=sh2('#5a4326',sideShade);x.fillRect(bx2-p*0.4,top,p*0.8,btm-top);
+      x.fillStyle=sh2('#5a4326',sideShade*1.3);x.fillRect(bx2-p*0.4,top,p*0.3,btm-top);
+      // prod: a horizontal arc near the BOTTOM, bowing downward (toward the screen)
+      const prodY=btm-p*1.4;
+      x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.7;x.lineCap='round';
+      x.beginPath();x.moveTo(bx2-p*2.2,prodY);x.quadraticCurveTo(bx2-facing*p*0.4,prodY+p*1.2,bx2+p*2.2,prodY);x.stroke();
+      x.strokeStyle=sh2(shade(rc,1.4),sideShade);x.lineWidth=p*0.25;
+      x.beginPath();x.moveTo(bx2-p*2.2,prodY);x.quadraticCurveTo(bx2-facing*p*0.4,prodY+p*1.2,bx2+p*2.2,prodY);x.stroke();
+      // string across the prod tips back up to the rail
+      x.strokeStyle=sh2('#e8e0c8',sideShade);x.lineWidth=p*0.2;
+      x.beginPath();x.moveTo(bx2-p*2.2,prodY);x.lineTo(bx2,prodY-p*1.4);x.lineTo(bx2+p*2.2,prodY);x.stroke();
+      // bolt pointing DOWN along the rail
+      x.fillStyle=sh2('#d7ccae',sideShade);x.fillRect(bx2-p*0.2,btm-p*2.2,p*0.4,p*3);
+      x.fillStyle=sh2('#dfe6ea',sideShade);x.beginPath();x.moveTo(bx2,btm+p*1.4);x.lineTo(bx2-p*0.6,btm+p*0.4);x.lineTo(bx2+p*0.6,btm+p*0.4);x.closePath();x.fill();
+    }
     else{x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.7;x.beginPath();x.moveTo(bx,topY+p*0.5);x.quadraticCurveTo(bx-facing*p*1.6,topY+p*4.5,bx,topY+p*8.5);x.stroke();x.strokeStyle=sh2('#e8e0c8',sideShade);x.lineWidth=p*0.2;x.beginPath();x.moveTo(bx,topY+p*0.5);x.lineTo(bx,topY+p*8.5);x.stroke();}}
+  // ---- equipped trinket charm ----
   if(tr){const tc=tr.c;x.fillStyle=sh2(tc,sideShade*1.2);x.beginPath();x.arc(cx-facing*p*2.2,topY+p*5,p*0.8,0,7);x.fill();}
-  const parts=[wp,rng,ar,hl,tr].filter(Boolean);document.getElementById('dollTitle').textContent=parts.length?(hl?hl.name.split(' ').pop():'Warrior'):'Bare Wanderer';}
+  document.getElementById('dollTitle').textContent=sk.name;}
 
 /* buttons */
 document.getElementById('toLogBtn').onclick=showLog;
@@ -1421,15 +1965,18 @@ document.getElementById('invBackBtn').onclick=showWelcome;
 document.getElementById('addDoBtn').onclick=()=>addGoal('do');
 document.getElementById('addAvoidBtn').onclick=()=>addGoal('avoid');
 document.getElementById('newGoalInput').addEventListener('keydown',e=>{if(e.key==='Enter')addGoal('do');});
-document.getElementById('rotL').onclick=()=>{dollAngle-=0.5;drawDoll();};
-document.getElementById('rotR').onclick=()=>{dollAngle+=0.5;drawDoll();};
+document.getElementById('rotL').onclick=()=>cycleEquippedSkin(-1);
+document.getElementById('rotR').onclick=()=>cycleEquippedSkin(1);
+document.getElementById('skinPrev').onclick=()=>browseSkin(-1);
+document.getElementById('skinNext').onclick=()=>browseSkin(1);
+document.getElementById('beginBtn').onclick=()=>{const sk=SKINS[skinBrowse];if(!skinUnlocked(sk))return;game.skin=sk.id;saveGame();showWelcome();};
 document.getElementById('tabGear').onclick=()=>setInvTab('gear');
 document.getElementById('tabForge').onclick=()=>setInvTab('forge');
 document.getElementById('tabStats').onclick=()=>setInvTab('stats');
 document.getElementById('fuseBtn').onclick=doFuse;
 function invTick(){if(!document.getElementById('invPanel').classList.contains('hidden')&&invTab==='gear')drawDoll();requestAnimationFrame(invTick);}
 
-(async()=>{resize();await loadTracker();await loadGame();const D=derived();player.maxhp=D.maxhp;player.hp=player.maxhp;showWelcome();loop();invTick();})();
+(async()=>{resize();await loadTracker();await loadGame();const D=derived();player.maxhp=D.maxhp;player.hp=player.maxhp;skinBrowse=Math.max(0,SKINS.findIndex(s=>s.id===game.skin));showCharSelect();loop();invTick();skinPreviewTick();})();
 </script>
 </body>
 </html>
