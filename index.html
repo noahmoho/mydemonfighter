@@ -361,14 +361,15 @@ function skinUnlocked(s){
   if(s.unlock&&s.unlock.level)return game.level>=s.unlock.level;
   return false;
 }
-let game={xp:0,level:1,loot:[],equip:{weapon:null,ranged:null,armor:null,helm:null,trinket:null},throwables:{dagger:3,bomb:2},bestStreak:0,skin:'wanderer',skinsUnlocked:[]};
+let game={xp:0,level:1,loot:[],equip:{weapon:null,ranged:null,armor:null,helm:null,trinket:null},throwables:{dagger:3,bomb:2},bestStreak:0,skin:'wanderer',skinsUnlocked:[],marchDays:0};
 async function loadGame(){try{const v=await STORE.get('goalquest:v5');if(v)game=Object.assign(game,JSON.parse(v));}catch(e){}
   if(!game.equip)game.equip={weapon:null,ranged:null,armor:null,helm:null,trinket:null};
   if(game.equip.trinket===undefined)game.equip.trinket=null;
   if(game.equip.ranged===undefined)game.equip.ranged=null;
   if(!game.throwables)game.throwables={dagger:3,bomb:2};
   if(!game.skin)game.skin='wanderer';
-  if(!game.skinsUnlocked)game.skinsUnlocked=[];}
+  if(!game.skinsUnlocked)game.skinsUnlocked=[];
+  if(game.marchDays===undefined)game.marchDays=0;}
 async function saveGame(){try{await STORE.set('goalquest:v5',JSON.stringify(game));}catch(e){}}
 
 function ensureTracker(){
@@ -394,23 +395,36 @@ function recomputeStreak(){const k=todayKey();let td=0,dd=0;const checks=tracker
   for(const cat of Object.keys(tracker.items))tracker.items[cat].forEach((it,i)=>{if(it.type==='do'){td++;if(checks[cat+':'+i])dd++;}});
   const idx=tracker.streakDates.indexOf(k),complete=td>0&&dd===td;
   if(complete&&idx===-1)tracker.streakDates.push(k);if(!complete&&idx!==-1)tracker.streakDates.splice(idx,1);}
+// Full tier ladder. Completion % sets a FLOOR tier; streak/days push HIGHER from there.
+const TIERS=[
+  {idx:0, name:'Sunlit Clearing',                 col:'#bdb59c',     biome:'forest'},
+  {idx:1, name:'Forest Edge',                     col:'var(--moss)', biome:'forest'},
+  {idx:2, name:'Tangled Grove',                   col:'var(--blue)', biome:'forest'},
+  {idx:3, name:'Deep Thicket',                    col:'var(--purple)',biome:'forest'},
+  {idx:4, name:'Heart of the Wood — APEX HUNT',   col:'var(--gold)', biome:'forest'},
+  {idx:5, name:'Blighted Tundra',                 col:'#9ad0d8',     biome:'frostfell'},
+  {idx:6, name:'The Cinereal Waste',              col:'#b0a890',     biome:'ashfall'},   // NEW
+  {idx:7, name:'The Umbral Deep',                 col:'#a06fe0',     biome:'umbral'},     // NEW
+  {idx:8, name:'Frozen Reach',                    col:'#7ac0e0',     biome:'frostfell'},
+  {idx:9, name:'Ashen Hollow',                    col:'#e0683c',     biome:'frostfell'},
+  {idx:10,name:'The Worldwound — NIGHTMARE',      col:'#ff5a4a',     biome:'volcanic'},
+  {idx:11,name:'Cinder Wastes',                   col:'#ff8a3a',     biome:'volcanic'},
+  {idx:12,name:'Magma Vault',                     col:'#ff6a2a',     biome:'volcanic'},
+  {idx:13,name:'The Sundered Throne — ABYSS',     col:'#ff3a6a',     biome:'volcanic'},
+];
 function tierFor(pct,streak){
   streak=streak||0;
-  // At full completion, daily streak unlocks deeper, deadlier tiers across three biomes.
-  if(pct>=1.0){
-    if(streak>=7)return{idx:11,name:'The Sundered Throne — ABYSS',col:'#ff3a6a',biome:'volcanic'};
-    if(streak>=6)return{idx:10,name:'Magma Vault',col:'#ff6a2a',biome:'volcanic'};
-    if(streak>=5)return{idx:9, name:'Cinder Wastes',col:'#ff8a3a',biome:'volcanic'};
-    if(streak>=4)return{idx:8, name:'The Worldwound — NIGHTMARE',col:'#ff5a4a',biome:'volcanic'};
-    if(streak>=3)return{idx:7, name:'Ashen Hollow',col:'#e0683c',biome:'frostfell'};
-    if(streak>=2)return{idx:6, name:'Frozen Reach',col:'#7ac0e0',biome:'frostfell'};
-    if(streak>=1) return{idx:5, name:'Blighted Tundra',col:'#9ad0d8',biome:'frostfell'};
-    return{idx:4,name:'Heart of the Wood — APEX HUNT',col:'var(--gold)',biome:'forest'};
-  }
-  if(pct>=0.75)return{idx:3,name:'Deep Thicket',col:'var(--purple)',biome:'forest'};
-  if(pct>=0.5)return{idx:2,name:'Tangled Grove',col:'var(--blue)',biome:'forest'};
-  if(pct>=0.25)return{idx:1,name:'Forest Edge',col:'var(--moss)',biome:'forest'};
-  return{idx:0,name:'Sunlit Clearing',col:'#bdb59c',biome:'forest'};
+  // completion % picks a band [floor, cap]; streak/marched-days push UP within the band.
+  let floor,cap;
+  if(pct>=1.0)      {floor=7; cap=13;}  // 100% → Umbral Deep up to the Abyss (Nyxhal at 10+)
+  else if(pct>=0.84){floor=6; cap=9;}   // 84–99% → Cinereal Waste up through Ashen Hollow (Cindermaw)
+  else if(pct>=0.70){floor=5; cap=6;}   // 70–84% → Blighted Tundra / Cinereal Waste
+  else if(pct>=0.50){floor=3; cap=4;}   // 50–70% → Deep Thicket / Apex Hunt
+  else if(pct>=0.25){floor=1; cap=2;}   // 25–50% → Forest Edge / Tangled Grove
+  else              {floor=0; cap=0;}   // <25%   → Sunlit Clearing
+  // streak nudges up within the band (1 tier per day), clamped to the band's cap
+  const idx=Math.max(0,Math.min(cap, floor+streak));
+  return TIERS[idx];
 }
 // Biome palettes — sky gradient stops, ground stops, wall tones, tree tint, dapple, fog band.
 const BIOMES={
@@ -422,7 +436,13 @@ const BIOMES={
     dapple:'#6a7e8c',fogBand:'220,232,239',treeTint:0.72,sunBloom:'200,224,240',hazeA:'90,116,134',hazeB:'70,94,112'},
   volcanic:{sky:['#2a1018','#5a2018','#8a3a1a','#c87038'],ground:['#3a2418','#2a1810','#180c08'],
     wallA:'#4a2a24',wallB:'#3a2018',wallMoss:'#8a4030',wallDark:'#1a0c08',mossStreak:'#c85838',
-    dapple:'#6a3020',fogBand:'200,110,70',treeTint:0.5,sunBloom:'255,150,80',hazeA:'90,40,30',hazeB:'60,26,20'}
+    dapple:'#6a3020',fogBand:'200,110,70',treeTint:0.5,sunBloom:'255,150,80',hazeA:'90,40,30',hazeB:'60,26,20'},
+  ashfall:{sky:['#1a1816','#363230','#5a544c','#8a8278'],ground:['#3e3a34','#2c2824','#1a1816'],
+    wallA:'#4a463e',wallB:'#39352e',wallMoss:'#6a6256',wallDark:'#23201b',mossStreak:'#7a7064',
+    dapple:'#565046',fogBand:'150,142,130',treeTint:0.42,sunBloom:'190,180,160',hazeA:'74,70,62',hazeB:'52,48,42'},
+  umbral:{sky:['#0c0a18','#1a1430','#2e2050','#4a2e72'],ground:['#1e162e','#150f22','#0c0814'],
+    wallA:'#2e2444',wallB:'#241c38',wallMoss:'#5a3a8a',wallDark:'#140e22',mossStreak:'#7a4ac0',
+    dapple:'#3a2a5a',fogBand:'90,60,140',treeTint:0.5,sunBloom:'150,100,220',hazeA:'46,32,72',hazeB:'32,22,52'}
 };
 let curBiome='forest';
 
@@ -544,13 +564,107 @@ const LOOT=[
   {id:'t13',slot:'trinket',name:'Stormheart Gem',rarity:'legendary',form:'sigil',c:'#60c0ff',stats:{rdmg:14,aspd:12,crit:12,mspd:6}},
   {id:'t14',slot:'trinket',name:'Eye of the Worldwound',rarity:'mythic',form:'sigil',c:'#ff5a6a',stats:{crit:24,dmg:10,rdmg:10,luck:18,dodge:8}},
   {id:'t15',slot:'trinket',name:'Heartstone of Eternity',rarity:'mythic',form:'fang',c:'#b060ff',stats:{vit:30,regen:8,luck:20,harvest:20,dodge:12}},
+  // ============================================================
+  // ===== EXPANDED ARSENAL — heavy variety low, unique top =====
+  // ============================================================
+  // ---- COMMON melee (lots of variety) ----
+  {id:'w40',slot:'weapon',name:'Chipped Falchion',rarity:'common',form:'sword',c:'#b0a890',stats:{dmg:3,aspd:3}},
+  {id:'w41',slot:'weapon',name:'Woodsman Axe',rarity:'common',form:'axe',c:'#9a7a52',stats:{dmg:4,harvest:6}},
+  {id:'w42',slot:'weapon',name:'Knotted Cudgel',rarity:'common',form:'club',c:'#7a5e3a',stats:{dmg:5,aspd:-7}},
+  {id:'w43',slot:'weapon',name:'Sharpened Stake',rarity:'common',form:'spear',c:'#a89878',stats:{dmg:3,mspd:4}},
+  {id:'w44',slot:'weapon',name:'Squire Blade',rarity:'common',form:'sword',c:'#c0b8a0',stats:{dmg:4,crit:1}},
+  // ---- UNCOMMON melee ----
+  {id:'w45',slot:'weapon',name:'Briar Warpick',rarity:'uncommon',form:'axe',c:'#6a9a4a',stats:{dmg:6,crit:5}},
+  {id:'w46',slot:'weapon',name:'Riverbend Saber',rarity:'uncommon',form:'sword',c:'#6ab0c0',stats:{dmg:5,aspd:10,crit:3}},
+  {id:'w47',slot:'weapon',name:'Boarspear of the Hunt',rarity:'uncommon',form:'spear',c:'#a07850',stats:{dmg:7,crit:3,mspd:4}},
+  {id:'w48',slot:'weapon',name:'Tollkeeper Mace',rarity:'uncommon',form:'club',c:'#9a8a6a',stats:{dmg:8,vit:4,aspd:-5}},
+  // ---- RARE melee ----
+  {id:'w49',slot:'weapon',name:'Frostbrand Longsword',rarity:'rare',form:'sword',c:'#7ac0e0',stats:{dmg:9,crit:7,aspd:4}},
+  {id:'w50',slot:'weapon',name:'Thornroot Halberd',rarity:'rare',form:'spear',c:'#6a9a3a',stats:{dmg:11,crit:5,harvest:10}},
+  {id:'w51',slot:'weapon',name:'Bloodmoon Cleaver',rarity:'rare',form:'axe',c:'#b03a3a',stats:{dmg:13,crit:6,regen:2}},
+  // ---- EPIC melee ----
+  {id:'w52',slot:'weapon',name:'Stormcaller Warhammer',rarity:'epic',form:'club',c:'#6f9fd0',stats:{dmg:16,crit:8,rdmg:5,aspd:-4}},
+  {id:'w53',slot:'weapon',name:'Duskfang Rapier',rarity:'epic',form:'sword',c:'#9a6fc0',stats:{dmg:12,crit:16,aspd:12}},
+  // ---- LEGENDARY melee (unique medieval-fantasy) ----
+  {id:'w54',slot:'weapon',name:'Caliburn, the Oathkeeper',rarity:'legendary',form:'sword',c:'#f0e8c0',stats:{dmg:22,crit:18,vit:12,regen:3}},
+  {id:'w55',slot:'weapon',name:'Grithammer of the Mountain-Kings',rarity:'legendary',form:'club',c:'#d0a850',stats:{dmg:28,crit:10,vit:14,aspd:-6}},
+  {id:'w56',slot:'weapon',name:'Reaper of the Hollow Fields',rarity:'legendary',form:'axe',c:'#8aa840',stats:{dmg:24,crit:18,harvest:30,regen:2}},
+  // ---- MYTHIC melee (unique, legendary myth) ----
+  {id:'w57',slot:'weapon',name:'Mournblade, Drinker of Kings',rarity:'mythic',form:'sword',c:'#b060ff',stats:{dmg:34,crit:24,regen:6,dodge:8,luck:10}},
+  {id:'w58',slot:'weapon',name:'Ragnarok, the World-Ender',rarity:'mythic',form:'axe',c:'#ff6a4a',stats:{dmg:42,crit:20,rdmg:10,vit:10}},
+  // ---- COMMON/UNCOMMON ranged (variety) ----
+  {id:'b20',slot:'ranged',name:'Bent Twig Bow',rarity:'common',form:'shortbow',c:'#9a8050',rate:30,proj:'arrow',stats:{rdmg:4}},
+  {id:'b21',slot:'ranged',name:'Hunter Selfbow',rarity:'common',form:'longbow',c:'#a89060',rate:34,proj:'arrow',stats:{rdmg:5,crit:1}},
+  {id:'b22',slot:'ranged',name:'Latch Crossbow',rarity:'uncommon',form:'crossbow',c:'#8a8a6a',rate:46,proj:'bolt',stats:{rdmg:9,crit:5}},
+  {id:'b23',slot:'ranged',name:'Greenwood Longbow',rarity:'uncommon',form:'longbow',c:'#7aa850',rate:30,proj:'arrow',stats:{rdmg:8,mspd:3}},
+  // ---- RARE/EPIC ranged ----
+  {id:'b24',slot:'ranged',name:'Glimmerfletch Recurve',rarity:'rare',form:'longbow',c:'#7ac0a0',rate:28,proj:'arrow',stats:{rdmg:13,crit:8,mspd:4}},
+  {id:'b25',slot:'ranged',name:'Siegebreaker Arbalest',rarity:'epic',form:'crossbow',c:'#c08040',rate:42,proj:'bolt',stats:{rdmg:20,crit:10,dmg:4}},
+  // ---- LEGENDARY/MYTHIC ranged (unique) ----
+  {id:'b26',slot:'ranged',name:'Failnaught, the Unerring',rarity:'legendary',form:'longbow',c:'#f0d890',rate:24,proj:'arrow',stats:{rdmg:28,crit:24,aspd:10,luck:8}},
+  {id:'b27',slot:'ranged',name:'Doomtongue, Maw of the Siege',rarity:'mythic',form:'crossbow',c:'#ff5ad0',rate:34,proj:'bolt',stats:{rdmg:38,crit:18,dmg:8,luck:12}},
+  // ---- COMMON/UNCOMMON armor (variety) ----
+  {id:'a20',slot:'armor',name:'Patched Gambeson',rarity:'common',form:'cloth',c:'#8a7858',stats:{vit:9}},
+  {id:'a21',slot:'armor',name:'Hide Wrappings',rarity:'common',form:'cloth',c:'#7a6248',stats:{vit:7,mspd:3}},
+  {id:'a22',slot:'armor',name:'Banded Hauberk',rarity:'uncommon',form:'scale',c:'#6a7a8a',stats:{vit:15,regen:1}},
+  {id:'a23',slot:'armor',name:'Outrider Brigandine',rarity:'uncommon',form:'plate',c:'#7a6a4a',stats:{vit:13,mspd:4}},
+  // ---- RARE/EPIC armor ----
+  {id:'a24',slot:'armor',name:'Wardens Halfplate',rarity:'rare',form:'plate',c:'#5a8aa0',stats:{vit:24,regen:2,crit:2}},
+  {id:'a25',slot:'armor',name:'Shadowmsea Cuirass',rarity:'epic',form:'scale',c:'#5a5a8a',stats:{vit:30,dodge:10,mspd:5}},
+  // ---- LEGENDARY/MYTHIC armor (unique) ----
+  {id:'a26',slot:'armor',name:'Lorica of the Dawnward',rarity:'legendary',form:'plate',c:'#f0e0a0',stats:{vit:60,regen:5,dodge:6}},
+  {id:'a27',slot:'armor',name:'Carapace of the Sleeping God',rarity:'mythic',form:'scale',c:'#b060ff',stats:{vit:80,regen:8,dodge:14,crit:6}},
+  // ---- COMMON/UNCOMMON helm (variety) ----
+  {id:'h20',slot:'helm',name:'Padded Hood',rarity:'common',form:'cap',c:'#7a6248',stats:{vit:3,mspd:1}},
+  {id:'h21',slot:'helm',name:'Iron Skullcap',rarity:'common',form:'helm',c:'#8a8a7a',stats:{vit:5}},
+  {id:'h22',slot:'helm',name:'Fletchers Hood',rarity:'uncommon',form:'cap',c:'#6a8a5a',stats:{vit:5,rdmg:4}},
+  {id:'h23',slot:'helm',name:'Visored Bascinet',rarity:'uncommon',form:'helm',c:'#7a8a9a',stats:{vit:9,crit:2}},
+  // ---- RARE/EPIC helm ----
+  {id:'h24',slot:'helm',name:'Antlered Warhelm',rarity:'rare',form:'antler',c:'#9a7a4a',stats:{vit:14,dmg:4,crit:3}},
+  {id:'h25',slot:'helm',name:'Diadem of the Seer',rarity:'epic',form:'crown',c:'#a86fc0',stats:{vit:16,luck:12,crit:6}},
+  // ---- LEGENDARY/MYTHIC helm (unique) ----
+  {id:'h26',slot:'helm',name:'Crown of the Drowned Court',rarity:'legendary',form:'crown',c:'#60c0d0',stats:{vit:28,luck:14,regen:3,crit:8}},
+  {id:'h27',slot:'helm',name:'Helm of the Hollow King',rarity:'mythic',form:'horned',c:'#b060ff',stats:{vit:34,crit:18,dmg:8,luck:14,dodge:8}},
+  // ---- COMMON/UNCOMMON/RARE trinkets (variety) ----
+  {id:'t20',slot:'trinket',name:'Rabbit Foot',rarity:'common',form:'charm',c:'#9a8a6a',stats:{luck:5}},
+  {id:'t21',slot:'trinket',name:'Whetstone Charm',rarity:'common',form:'fang',c:'#8a8a7a',stats:{dmg:3,crit:2}},
+  {id:'t22',slot:'trinket',name:'Pilgrims Token',rarity:'uncommon',form:'charm',c:'#7a9a6a',stats:{regen:2,vit:5}},
+  {id:'t23',slot:'trinket',name:'Hawk Feather Sigil',rarity:'uncommon',form:'sigil',c:'#9aa060',stats:{rdmg:6,crit:4}},
+  {id:'t24',slot:'trinket',name:'Ironwood Fang',rarity:'rare',form:'fang',c:'#7a5a3a',stats:{dmg:7,vit:8,crit:3}},
+  // ---- EPIC/LEGENDARY/MYTHIC trinkets (unique) ----
+  {id:'t25',slot:'trinket',name:'Locket of the Lost Saint',rarity:'epic',form:'charm',c:'#c0a0e0',stats:{regen:4,luck:10,vit:10}},
+  {id:'t26',slot:'trinket',name:'Sigil of the Sunlit Throne',rarity:'legendary',form:'sigil',c:'#f0d060',stats:{dmg:10,crit:14,luck:14,aspd:8}},
+  {id:'t27',slot:'trinket',name:'The Covenant Heart',rarity:'mythic',form:'fang',c:'#ff5ad0',stats:{dmg:14,rdmg:14,crit:20,regen:6,luck:22}},
+  // ============================================================
+  // ===== SPECIAL WEAPONS — unique forms & combat =====
+  // ============================================================
+  // melee
+  {id:'w60',slot:'weapon',name:'Iron Spiked Flail',rarity:'uncommon',form:'flail',c:'#9aa0a8',stats:{dmg:9,vit:4,aspd:-8}},
+  {id:'w61',slot:'weapon',name:"Warden's Morningstar",rarity:'rare',form:'flail',c:'#b0b4bc',stats:{dmg:14,crit:6,aspd:-9}},
+  {id:'w62',slot:'weapon',name:'Pilgrim\'s Longspear',rarity:'uncommon',form:'longspear',c:'#a89868',stats:{dmg:7,mspd:5,aspd:-2}},
+  {id:'w63',slot:'weapon',name:'Halberd of the Long Watch',rarity:'epic',form:'longspear',c:'#8ac0d0',stats:{dmg:15,crit:8,mspd:4,aspd:-2}},
+  {id:'w64',slot:'weapon',name:'Twin Fangs',rarity:'rare',form:'knives',c:'#9ad0a0',stats:{dmg:6,aspd:22,crit:8}},
+  {id:'w65',slot:'weapon',name:'Whisper & Wail',rarity:'legendary',form:'knives',c:'#e0c0f0',stats:{dmg:11,aspd:28,crit:20,dodge:8}},
+  {id:'w66',slot:'weapon',name:'Tempest, Breath of the Sky',rarity:'mythic',form:'windstaff',c:'#9ae0ff',stats:{dmg:24,crit:14,mspd:10,dodge:10}},
+  // ranged
+  {id:'b60',slot:'ranged',name:'Forked Slingshot',rarity:'common',form:'slingshot',c:'#9a8868',rate:24,proj:'stone',stats:{rdmg:4}},
+  {id:'b61',slot:'ranged',name:'Leather Slingshot',rarity:'common',form:'slingshot',c:'#8a7858',rate:22,proj:'stone',stats:{rdmg:3,aspd:5}},
+  {id:'b62',slot:'ranged',name:'Stormcrack, the Lightning Rod',rarity:'mythic',form:'wizstaff',c:'#6ad0ff',rate:40,proj:'spark',stats:{rdmg:30,crit:16,dmg:6,luck:10}},
+  {id:'b63',slot:'ranged',name:'Trinity, the Threefold Draw',rarity:'mythic',form:'trinitybow',c:'#ffd86a',rate:46,proj:'arrow',stats:{rdmg:26,crit:18,aspd:6,luck:8}},
 ];
 function lootById(id){return LOOT.find(l=>l.id===id)||null;}
 const RC={common:'#bdb59c',uncommon:'#7aa85a',rare:'#5a8fc0',epic:'#a86fc0',legendary:'#e0b13c',mythic:'#ff5ad0'};
 function rollLoot(tier,streak,luck){
-  const lift=tier+Math.floor(streak/3)+Math.floor((luck||0)/20);
-  const base=[100,40,16,6,2,0.5];   // 6th = mythic (very rare, only at high lift)
-  const weights=base.map((w,i)=>{const shift=Math.pow(1.9,lift)*(i/2);return i===0?w/Math.pow(1.5,lift):w*(1+shift);});
+  const lift=tier+Math.floor(streak/4)+Math.floor((luck||0)/25);
+  // base weights favor low rarity; epic+ scarce. Tuned so top tiers still feel rewarding but
+  // legendary/mythic stay genuinely rare chase drops.
+  const base=[100,42,20,7,1.6,0.30];   // common,uncommon,rare,epic,legendary,mythic
+  // commons fall off as you climb; each higher rarity ramps up with lift but the top tiers slower
+  const liftMul=[0,1.28,1.34,1.30,1.20,1.12];   // per-rarity growth factor per lift step
+  const weights=base.map((w,i)=>{
+    if(i===0)return w/Math.pow(1.7,lift);
+    return w*Math.pow(liftMul[i],lift);
+  });
   let total=weights.reduce((a,b)=>a+b,0),r=Math.random()*total,idx=0;
   for(let i=0;i<weights.length;i++){if(r<weights[i]){idx=i;break;}r-=weights[i];}
   let pool=LOOT.filter(l=>l.rarity===RARITY[idx]);
@@ -608,7 +722,32 @@ function drawLootIcon(cv,l){
     // trigger nub under the stock at the back
     x.fillStyle='#3a2d1d';x.fillRect(p*10.5,midY+p*0.8,p*1.4,p*2);
   }
-  else if(F==='bomb'){x.fillStyle='#2a2a2a';x.beginPath();x.arc(p*8,p*10,p*4.5,0,7);x.fill();x.fillStyle='#4a4a4a';x.beginPath();x.arc(p*6.5,p*8.5,p*1.5,0,7);x.fill();x.fillStyle='#7a5a2a';x.fillRect(p*8,p*3,p,p*3);x.fillStyle='#e0b13c';x.fillRect(p*8,p*2,p*1.5,p*1.5);}
+  else if(F==='flail'){
+    // handle bottom-left, chain rising diagonally, spiked ball top-right (like a held flail)
+    x.fillStyle='#5a4326';x.fillRect(p*3,p*11,p*1.6,p*4);   // handle
+    x.fillStyle='#3a2d1d';x.fillRect(p*3,p*14,p*1.6,p*1.2); // pommel
+    // chain links
+    x.fillStyle='#9aa0a8';for(let i=0;i<5;i++){const t=i/5;x.fillRect(p*(3.8+t*5),p*(11-t*6.5),p*0.9,p*0.9);}
+    // spiked ball
+    const bx=p*10,by=p*4;x.fillStyle=shade(C,0.8);
+    for(let k=0;k<8;k++){const a=k/8*6.283;x.beginPath();x.moveTo(bx+Math.cos(a)*p*2,by+Math.sin(a)*p*2);x.lineTo(bx+Math.cos(a)*p*4,by+Math.sin(a)*p*4);x.lineTo(bx+Math.cos(a+0.4)*p*2,by+Math.sin(a+0.4)*p*2);x.closePath();x.fill();}
+    x.fillStyle=shade(C,0.6);x.beginPath();x.arc(bx,by,p*2.6,0,7);x.fill();
+    x.fillStyle=C;x.beginPath();x.arc(bx-p*0.5,by-p*0.5,p*1.9,0,7);x.fill();
+    x.fillStyle=shade(C,1.4);x.beginPath();x.arc(bx-p*0.9,by-p*0.9,p*0.8,0,7);x.fill();
+  }
+  else if(F==='longspear'){x.fillStyle='#5a4a30';x.fillRect(p*7.3,p*2,p*1.4,p*12);x.fillStyle=shade('#5a4a30',1.3);x.fillRect(p*7.3,p*2,p*0.5,p*12);x.fillStyle=C;x.beginPath();x.moveTo(p*8,p);x.lineTo(p*9,p*4);x.lineTo(p*8,p*5);x.lineTo(p*7,p*4);x.closePath();x.fill();x.fillStyle=shade(C,1.4);x.fillRect(p*7.8,p*1.5,p*0.4,p*3);x.fillStyle='#9aa0aa';x.fillRect(p*5.5,p*5,p*5,p*0.8);}
+  else if(F==='knives'){for(const s of [0,1]){const ox=s*p*6;x.save();x.translate(p*5+ox,p*8);x.rotate(s?0.25:-0.25);
+    // knuckle ring
+    x.strokeStyle='#7d8893';x.lineWidth=p*0.7;x.beginPath();x.arc(0,p*3.5,p*1.4,-0.5,Math.PI+0.5);x.stroke();
+    // leaf blade
+    const bw=p*1.6,bl=p*7;x.fillStyle=shade(C,0.7);x.beginPath();x.moveTo(0,p*3);x.quadraticCurveTo(-bw,-p*0.5,-bw*0.5,-p*2.5);x.quadraticCurveTo(0,-bl+p*2.5,0,-p*3.5);x.quadraticCurveTo(0,-bl+p*2.5,bw*0.5,-p*2.5);x.quadraticCurveTo(bw,-p*0.5,0,p*3);x.closePath();x.fill();
+    x.fillStyle=C;x.beginPath();x.moveTo(0,p*2.5);x.quadraticCurveTo(bw*0.6,-p*0.5,bw*0.35,-p*2.4);x.quadraticCurveTo(0,-bl+p*2.5,0,-p*3.5);x.closePath();x.fill();
+    x.fillStyle=shade(C,1.5);x.fillRect(-p*0.12,-p*2.5,p*0.24,p*5);
+    x.restore();}}
+  else if(F==='windstaff'){x.fillStyle='#5a4a30';x.fillRect(p*7.4,p*5,p*1.2,p*9);x.strokeStyle=C;x.lineWidth=p*0.9;x.lineCap='round';x.beginPath();x.moveTo(p*6.5,p*5);x.quadraticCurveTo(p*4.5,p*3,p*7,p*1.5);x.moveTo(p*9.5,p*5);x.quadraticCurveTo(p*11.5,p*3,p*9,p*1.5);x.stroke();x.fillStyle='#9ae0ff';x.beginPath();x.arc(p*8,p*3.5,p*2.2,0,7);x.fill();x.fillStyle='#cfeeff';x.beginPath();x.arc(p*8,p*3.5,p*1.1,0,7);x.fill();x.strokeStyle='rgba(200,240,255,0.7)';x.lineWidth=p*0.4;for(let k=0;k<2;k++){x.beginPath();x.arc(p*8,p*3.5,p*3+k*p,0.5,2.5);x.stroke();}}
+  else if(F==='slingshot'){x.strokeStyle=C;x.lineWidth=p*1.2;x.lineCap='round';x.beginPath();x.moveTo(p*8,p*14);x.lineTo(p*8,p*8);x.moveTo(p*8,p*8);x.lineTo(p*5,p*4);x.moveTo(p*8,p*8);x.lineTo(p*11,p*4);x.stroke();x.strokeStyle='#6a4a3a';x.lineWidth=p*0.4;x.beginPath();x.moveTo(p*5,p*4);x.lineTo(p*8,p*6);x.lineTo(p*11,p*4);x.stroke();x.fillStyle='#b8b0a0';x.beginPath();x.arc(p*8,p*6,p*1,0,7);x.fill();}
+  else if(F==='wizstaff'){x.fillStyle='#5a4a30';x.save();x.translate(p*8,p*8);x.rotate(0.5);x.fillRect(-p*0.7,-p*6,p*1.4,p*12);x.restore();x.strokeStyle=C;x.lineWidth=p*0.8;for(const s of [-1,1]){x.save();x.translate(p*10.5,p*4);x.rotate(s*0.6);x.beginPath();x.moveTo(0,0);x.lineTo(p*1.6,-p*0.6);x.stroke();x.restore();}x.fillStyle='#6ad0ff';x.beginPath();x.arc(p*10.5,p*4,p*2.3,0,7);x.fill();x.fillStyle='#bfeaff';x.beginPath();x.arc(p*10.5,p*4,p*1.1,0,7);x.fill();x.strokeStyle='#9ae0ff';x.lineWidth=p*0.4;for(let k=0;k<3;k++){const a=k*2.1;x.beginPath();x.moveTo(p*10.5,p*4);x.lineTo(p*10.5+Math.cos(a)*p*3,p*4+Math.sin(a)*p*3);x.stroke();}}
+  else if(F==='trinitybow'){const span=p*12,y0=(16*p-span)/2;x.strokeStyle=C;x.lineWidth=p*1.3;x.beginPath();x.moveTo(p*10,y0);x.quadraticCurveTo(p*4,p*8,p*10,y0+span);x.stroke();x.strokeStyle=shade(C,1.4);x.lineWidth=p*0.5;x.stroke();x.strokeStyle='#e8e0c8';x.lineWidth=p*0.4;x.beginPath();x.moveTo(p*10,y0);x.lineTo(p*10,y0+span);x.stroke();x.fillStyle='#dfe6ea';for(const dy of [-2.2,0,2.2]){x.beginPath();x.moveTo(p*3,p*8+dy*p);x.lineTo(p*6,p*7.5+dy*p);x.lineTo(p*6,p*8.5+dy*p);x.closePath();x.fill();x.fillStyle='#caa46a';x.fillRect(p*6,p*7.8+dy*p,p*3,p*0.5);x.fillStyle='#dfe6ea';}}
 }
 function makeIcon(l,size){const cv=document.createElement('canvas');cv.width=size||42;cv.height=size||42;drawLootIcon(cv,l);return cv;}
 const THROW_DEF={dagger:{name:'Throwing Dagger',form:'dagger',c:'#cdd',rarity:'uncommon',dmg:14,key:'1'},bomb:{name:'Bomb',form:'bomb',c:'#2a2a2a',rarity:'rare',dmg:30,key:'2',aoe:2.2}};
@@ -637,7 +776,9 @@ const MOBS=[
   // ---- The Worldwound (tier 7) ----
   {id:'voidhound',name:'Void Hound',    col:'#2a2a4a',col2:'#7a7aff',hp:210,dmg:36,speed:0.040,size:1.0,minTier:7,xp:170,move:'stalk',  atk:'charge',ability:'enrage',shape:'wendigo'},
   {id:'titan',    name:'Hollow Titan',  col:'#4a4a5a',col2:'#9aa0c0',hp:320,dmg:40,speed:0.012,size:1.2,minTier:7,xp:220,move:'lumber', atk:'melee', ability:'shield',shape:'golem'},
-  {id:'BOSS',     name:'The Verdant Wyrm',col:'#e0b13c',col2:'#3a5a32',hp:360,dmg:22,speed:0.020,size:1.5,minTier:4,xp:280,move:'serpent',atk:'mixed',ability:'shield',shape:'wyrm',boss:true},
+  {id:'BOSS',     name:'The Verdant Wyrm',col:'#e0b13c',col2:'#3a5a32',hp:360,dmg:22,speed:0.020,size:1.5,minTier:4,xp:280,move:'serpent',atk:'mixed',ability:'shield',shape:'wyrm',boss:true,bossTier:4,bossMax:5},
+  {id:'BOSS_ASH', name:'Cindermaw, the Ashen King',col:'#c8b090',col2:'#ff7a3a',hp:520,dmg:34,speed:0.022,size:1.6,minTier:6,xp:420,move:'lumber',atk:'mixed',ability:'lava',shape:'ashlord',boss:true,bossTier:6,bossMax:9},
+  {id:'BOSS_VOID',name:'Nyxhal, the Devourer',col:'#9a6fe0',col2:'#e0a0ff',hp:680,dmg:42,speed:0.028,size:1.7,minTier:7,xp:600,move:'phase', atk:'mixed',ability:'enrage',shape:'voidmaw',boss:true,bossTier:10,bossMax:99},
 ];
 /* ============ WORLD ============ */
 const MAP_S=24;let map=[];let trees=[];
@@ -656,9 +797,9 @@ function buildForest(density){map=[];for(let y=0;y<MAP_S;y++){const row=[];for(l
 function treeBlocked(px,py){if(px<1.05||py<1.05||px>MAP_S-1.05||py>MAP_S-1.05)return true;
   for(const t of trees){if(Math.hypot(t.x-px,t.y-py)<t.r+0.22)return true;}return false;}
 const player={x:MAP_S/2,y:MAP_S/2,ang:0,hp:70,maxhp:70,cool:0,
-  combo:0,comboT:0,charging:false,chargeT:0,blocking:false,blockT:0,dodgeT:0,dodgeDx:0,dodgeDy:0,stamina:100,maxstam:100,regenAcc:0};
+  combo:0,comboT:0,charging:false,chargeT:0,blocking:false,blockT:0,dodgeT:0,dodgeDx:0,dodgeDy:0,stamina:100,maxstam:100,regenAcc:0,burnT:0,burnTick:0,fireAnim:0};
 let enemies=[],projectiles=[],thrown=[],pArrows=[],motes=[],particles=[],floaters=[],pickups=[],quest=null,frame=0;
-let shake=0,hitstop=0,parryFlash=0,slashArc=0,slashDir=1,swing=0,damageFlash=0,walkPhase=0,bobZ=0;
+let shake=0,hitstop=0,parryFlash=0,slashArc=0,slashDir=1,swing=0,damageFlash=0,walkPhase=0,bobZ=0,windFlash=0;
 const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
 const mobBuf=document.createElement('canvas'),mbx=mobBuf.getContext('2d');
 // Prebaked directional-light + AO overlay (built once, reused for every mob via source-atop).
@@ -756,6 +897,10 @@ function leafTint(hex){
     const avg=(r+g+bl)/3;r=(r*0.4+avg*0.3+150*0.3)|0;g=(g*0.4+avg*0.3+175*0.3)|0;bl=(bl*0.4+avg*0.3+195*0.3)|0;
   }else if(curBiome==='volcanic'){ // char toward dark ember red-brown
     r=(r*0.45+90*0.55)|0;g=(g*0.35+40*0.4)|0;bl=(bl*0.3+26*0.3)|0;
+  }else if(curBiome==='ashfall'){ // gray, dead, ashen
+    const avg=(r+g+bl)/3;r=(avg*0.6+80*0.4)|0;g=(avg*0.6+74*0.4)|0;bl=(avg*0.6+66*0.4)|0;
+  }else if(curBiome==='umbral'){ // dark violet shadow
+    r=(r*0.35+70*0.5)|0;g=(g*0.25+40*0.4)|0;bl=(bl*0.4+110*0.55)|0;
   }
   return 'rgb('+Math.min(255,r)+','+Math.min(255,g)+','+Math.min(255,bl)+')';
 }
@@ -843,6 +988,12 @@ function renderEntities(){
   for(const pr of projectiles){const o=proj(pr.x,pr.y);if(Math.abs(pr.__r=o.rel)>FOV/2+0.2||o.dPerp<=0.2)continue;const sx=o.sx,dP=o.dPerp;const col=Math.max(0,Math.min(W-1,sx|0));if(dP>zbuf[col])continue;const unit=H/dP;const sz=Math.max(3,unit*0.10);const yy=groundY(dP,horizon)-unit*(pr.fh||0.5);
     if(pr.bolt){ // arrow/bolt: streak shape
       const ang=Math.atan2(pr.vy,pr.vx)-player.ang;ctx.save();ctx.translate(sx,yy);ctx.rotate(0);ctx.fillStyle=pr.col;ctx.fillRect(-sz*1.6,-sz*0.16,sz*3.2,sz*0.32);ctx.fillStyle='#fff';ctx.fillRect(sz*1.0,-sz*0.16,sz*0.6,sz*0.32);ctx.fillStyle=pr.col2||'#caa46a';ctx.fillRect(-sz*1.8,-sz*0.3,sz*0.5,sz*0.6);ctx.restore();}
+    else if(pr.lava){ // molten lava orb: glowing aura + hot core
+      const lz=sz*1.5,fl=0.7+0.3*Math.sin(frame*0.3+pr.x);
+      ctx.globalAlpha=0.3*fl;ctx.fillStyle='#ff5a1a';ctx.beginPath();ctx.arc(sx,yy,lz*1.8,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+      ctx.fillStyle='#ff7a2a';ctx.beginPath();ctx.arc(sx,yy,lz,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#ffb030';ctx.beginPath();ctx.arc(sx,yy,lz*0.65,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#ffe860';ctx.beginPath();ctx.arc(sx-lz*0.15,yy-lz*0.15,lz*0.3,0,Math.PI*2);ctx.fill();}
     else{ctx.globalAlpha=0.4;ctx.fillStyle=pr.col;ctx.beginPath();ctx.arc(sx-pr.vx*40,yy-pr.vy*40,sz*0.7,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.fillStyle=pr.col;ctx.beginPath();ctx.arc(sx,yy,sz,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(sx,yy,sz*0.45,0,Math.PI*2);ctx.fill();}}
   // player arrows/bolts in flight — oriented along their real travel direction
   for(const ar of pArrows){const o=proj(ar.x,ar.y);if(Math.abs(o.rel)>FOV/2+0.2||o.dPerp<=0.2)continue;const sx=o.sx,dP=o.dPerp;const col=Math.max(0,Math.min(W-1,sx|0));if(dP>zbuf[col])continue;const unit=H/dP;const sz=Math.max(2,unit*0.06);const yy=groundY(dP,horizon)-unit*(ar.fh||0.5);
@@ -1125,6 +1276,56 @@ function drawMob(e,x,y,s,fog,sx){
     const eg=0.6+0.4*Math.sin(t*4);g.fillStyle='#c1543a';g.globalAlpha=eg;g.fillRect(x+p*4.6,y+p*1.6,p*0.9,p*0.9);g.fillRect(x+p*6,y+p*1.6,p*0.9,p*0.9);g.globalAlpha=1;
     g.fillStyle='#e8e8e8';for(let k=0;k<4;k++)g.fillRect(x+p*(4.9+k*0.5),y+p*3.4,p*0.3,p*0.7);
   }
+  else if(shp==='ashlord'){
+    // ===== BOSS: Cindermaw — a towering ashen king, molten cracks, crowned, furnace chest =====
+    const breathe=Math.sin(t*1.2)*p*0.6, glow=0.5+0.5*Math.sin(t*2);
+    // ember aura
+    g.globalAlpha=0.12*glow;g.fillStyle='#ff7a3a';g.beginPath();g.arc(x+p*6,y+p*5.5,p*6.5,0,Math.PI*2);g.fill();g.globalAlpha=1;
+    // legs
+    g.fillStyle=shade(shade(body,0.7),fog);g.fillRect(x+p*3,y+p*8.5,p*2.2,p*3);g.fillRect(x+p*7,y+p*8.5,p*2.2,p*3);
+    // hulking torso
+    g.fillStyle=shade(body,fog);g.beginPath();g.moveTo(x+p*2.5,y+p*3.5+breathe);g.lineTo(x+p*9.5,y+p*3.5+breathe);g.lineTo(x+p*8.5,y+p*9);g.lineTo(x+p*3.5,y+p*9);g.closePath();g.fill();
+    // molten cracks
+    g.strokeStyle='#ff6a20';g.lineWidth=p*0.4;g.globalAlpha=0.6+0.4*glow;
+    g.beginPath();g.moveTo(x+p*4,y+p*4+breathe);g.lineTo(x+p*5,y+p*6);g.lineTo(x+p*4.5,y+p*8);g.moveTo(x+p*7,y+p*4.2+breathe);g.lineTo(x+p*6.5,y+p*6.5);g.lineTo(x+p*7.5,y+p*8.2);g.stroke();g.globalAlpha=1;
+    // furnace chest core
+    g.fillStyle='#ff8a2a';g.globalAlpha=0.6+0.4*glow;g.beginPath();g.arc(x+p*6,y+p*6+breathe,p*1.6,0,Math.PI*2);g.fill();g.globalAlpha=1;
+    g.fillStyle='#ffe14a';g.beginPath();g.arc(x+p*6,y+p*6+breathe,p*0.8,0,Math.PI*2);g.fill();
+    // massive shoulders
+    g.fillStyle=shade(shade(body,1.1),fog);g.beginPath();g.arc(x+p*2.5,y+p*4+breathe,p*2,0,Math.PI*2);g.arc(x+p*9.5,y+p*4+breathe,p*2,0,Math.PI*2);g.fill();
+    // arms
+    g.fillStyle=shade(shade(body,0.8),fog);g.fillRect(x+p*0.5,y+p*4.5+breathe,p*2,p*5);g.fillRect(x+p*9.5,y+p*4.5+breathe,p*2,p*5);
+    // head
+    g.fillStyle=shade(shade(body,1.05),fog);g.fillRect(x+p*4.3,y+breathe,p*3.4,p*3.4);
+    // crown of jagged ash
+    g.fillStyle='#d8c8a0';for(let k=0;k<5;k++)g.fillRect(x+p*(4.2+k*0.7),y-p*1.2+breathe+(k%2?p*0.3:0),p*0.5,p*1.4);
+    // burning eyes
+    g.fillStyle='#fff';g.globalAlpha=0.7+0.3*glow;g.fillRect(x+p*4.8,y+p*1.2+breathe,p*1,p*0.9);g.fillRect(x+p*6.2,y+p*1.2+breathe,p*1,p*0.9);g.globalAlpha=1;
+    g.fillStyle='#ff5a20';g.fillRect(x+p*5,y+p*1.4+breathe,p*0.5,p*0.5);g.fillRect(x+p*6.4,y+p*1.4+breathe,p*0.5,p*0.5);
+    // jaw with molten teeth
+    g.fillStyle=shade(shade(body,0.7),fog);g.fillRect(x+p*4.6,y+p*2.8+breathe,p*2.8,p*0.8);
+    g.fillStyle='#ffb040';for(let k=0;k<4;k++)g.fillRect(x+p*(4.8+k*0.6),y+p*2.8+breathe,p*0.3,p*0.7);
+  }
+  else if(shp==='voidmaw'){
+    // ===== BOSS: Nyxhal — a floating void horror: dark mass, gaping maw, tendrils, many eyes =====
+    const float=Math.sin(t*1.3)*p*0.8, pulse=0.5+0.5*Math.sin(t*2.2);
+    // void aura halos
+    for(let r=0;r<3;r++){g.globalAlpha=0.10+0.05*pulse;g.fillStyle=c2;g.beginPath();g.arc(x+p*6,y+p*5+float,p*(5+r*1.5),0,Math.PI*2);g.fill();}g.globalAlpha=1;
+    // writhing tendrils below
+    g.strokeStyle=shade(body,fog);g.lineWidth=p*0.7;g.lineCap='round';
+    for(let k=0;k<5;k++){const tx=x+p*(2.5+k*1.8);g.beginPath();g.moveTo(tx,y+p*7+float);g.quadraticCurveTo(tx+Math.sin(t*2+k)*p*1.5,y+p*9.5,tx+Math.sin(t*2+k)*p*2.5,y+p*11.5);g.stroke();}
+    // central dark mass
+    g.fillStyle=shade(body,fog);g.beginPath();g.ellipse(x+p*6,y+p*4.5+float,p*4,p*3.8,0,0,Math.PI*2);g.fill();
+    g.fillStyle=shade(shade(body,0.6),fog);g.beginPath();g.ellipse(x+p*6,y+p*4.5+float,p*3,p*2.8,0,0,Math.PI*2);g.fill();
+    // gaping maw with teeth
+    g.fillStyle='#1a0a24';g.beginPath();g.ellipse(x+p*6,y+p*5.5+float,p*2,p*1.6,0,0,Math.PI*2);g.fill();
+    g.fillStyle='#e0c0ff';for(let k=0;k<6;k++){const a=k/6*Math.PI*2;g.beginPath();g.moveTo(x+p*6+Math.cos(a)*p*1.8,y+p*5.5+float+Math.sin(a)*p*1.4);g.lineTo(x+p*6+Math.cos(a)*p*1.2,y+p*5.5+float+Math.sin(a)*p*0.9);g.lineTo(x+p*6+Math.cos(a+0.3)*p*1.6,y+p*5.5+float+Math.sin(a+0.3)*p*1.2);g.closePath();g.fill();}
+    // glowing maw throat
+    g.fillStyle=c2;g.globalAlpha=0.4+0.4*pulse;g.beginPath();g.arc(x+p*6,y+p*5.5+float,p*0.7,0,Math.PI*2);g.fill();g.globalAlpha=1;
+    // cluster of eyes around the top
+    const eyePos=[[3.5,2],[5,1.2],[7,1.2],[8.5,2],[4.3,3.3],[7.7,3.3]];
+    for(const [ex,ey] of eyePos){g.fillStyle='#fff';g.globalAlpha=0.7+0.3*pulse;g.beginPath();g.arc(x+p*ex,y+p*ey+float,p*0.6,0,Math.PI*2);g.fill();g.globalAlpha=1;g.fillStyle=c2;g.beginPath();g.arc(x+p*ex,y+p*ey+float,p*0.3,0,Math.PI*2);g.fill();}
+  }
   else if(shp==='wyrm'){
     // ===== BOSS: a coiling horned dragon — layered body, spine ridges, frilled horned head, fangs =====
     const coil=Math.sin(t*1.5)*p, sway=Math.sin(t*1.1);
@@ -1183,6 +1384,8 @@ function drawMob(e,x,y,s,fog,sx){
 function renderHand(){
   const horizon=H/2+bobZ;
   const bob=Math.sin(walkPhase)*H*0.012;
+  // first-person hand color follows the chosen skin
+  const skinTone=skinById(game.skin).skin;
   // switch dip: hand drops down and rises back when changing weapon mode
   const switchDip=player.switchAnim>0?Math.sin((1-player.switchAnim/12)*Math.PI)*H*0.5:0;
   const charge=attackHeld?Math.min(1,attackHeldFrames/CHARGE_MAX):0;
@@ -1191,6 +1394,55 @@ function renderHand(){
     const rw=lootById(game.equip.ranged);const rc=RC[rw.rarity];
     const draw=attackHeld?charge:(player.bowAnim>0?player.bowAnim/10:0);
     const wood='#6b4a2b', woodD='#4d3420', woodL='#8a6238', horn=rc, hornL=shade(rc,1.3), str='#e9e2cc', shaft='#d7ccae';
+    // ---- legendary/mythic aura behind the ranged weapon ----
+    if(rw.rarity==='legendary'||rw.rarity==='mythic'){
+      const gx=rw.form==='crossbow'?W*0.6:W*0.86, gy=H*0.62, pulse=0.5+0.5*Math.sin(frame*0.12);
+      const gr=ctx.createRadialGradient(gx,gy,0,gx,gy,W*0.32);
+      gr.addColorStop(0,rc);gr.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.save();ctx.globalAlpha=(rw.rarity==='mythic'?0.28:0.20)*(0.7+0.3*pulse);ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=gr;ctx.beginPath();ctx.arc(gx,gy,W*0.32,0,Math.PI*2);ctx.fill();ctx.restore();
+      if(rw.rarity==='mythic'){ctx.save();ctx.globalCompositeOperation='lighter';for(let k=0;k<4;k++){const a=frame*0.05+k*1.57;ctx.globalAlpha=0.4+0.4*Math.sin(frame*0.1+k);ctx.fillStyle=rc;ctx.fillRect(gx+Math.cos(a)*W*0.18,gy+Math.sin(a)*H*0.18,3,3);}ctx.restore();}
+    }
+    // ---- FIRE STREAK: when fired, a projectile visibly launches from the weapon toward the crosshair ----
+    if(player.fireAnim>0){
+      const fp=1-player.fireAnim/8;                       // 0 at fire → 1 as it reaches center & beyond
+      const startX=rw.form==='crossbow'?W*0.42:rw.form==='slingshot'?W*0.7:rw.form==='wizstaff'?W*0.5:W*0.84;
+      const startY=rw.form==='crossbow'?H*0.46:rw.form==='slingshot'?H*0.6:rw.form==='wizstaff'?H*0.2:H*0.52;
+      const tgtX=W*0.5, tgtY=H*0.5;                        // crosshair
+      const ang=Math.atan2(tgtY-startY,tgtX-startX);
+      const streakCol=rw.rarity==='mythic'||rw.rarity==='legendary'?rc:'#e8e0c8';
+      const drawStreak=(sx0,sy0,col,headW)=>{
+        const px=sx0+(tgtX-sx0)*(fp*1.3), py=sy0+(tgtY-sy0)*(fp*1.3);
+        const len=Math.max(10,W*0.05*(1-fp));
+        const sw2=Math.max(2,(headW||W*0.008)*(1-fp*0.6));
+        ctx.save();ctx.globalAlpha=1-fp*0.7;
+        ctx.strokeStyle=col;ctx.lineWidth=sw2;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px-Math.cos(ang)*len,py-Math.sin(ang)*len);ctx.stroke();
+        ctx.fillStyle='#fff';ctx.translate(px,py);ctx.rotate(ang);ctx.beginPath();ctx.moveTo(sw2*2.2,0);ctx.lineTo(-sw2,-sw2*1.6);ctx.lineTo(-sw2,sw2*1.6);ctx.closePath();ctx.fill();
+        ctx.restore();
+      };
+      if(rw.form==='trinitybow'){
+        // three arrows fan out from the bow
+        const perpX=-Math.sin(ang), perpY=Math.cos(ang);
+        for(const off of [-1,0,1]){drawStreak(startX+perpX*off*W*0.05, startY+perpY*off*W*0.05, streakCol);}
+      } else if(rw.form==='wizstaff'){
+        // a jagged lightning bolt instead of an arrow
+        const px=startX+(tgtX-startX)*(fp*1.3), py=startY+(tgtY-startY)*(fp*1.3);
+        ctx.save();ctx.globalAlpha=1-fp*0.6;ctx.strokeStyle='#9ae0ff';ctx.lineWidth=Math.max(2,W*0.006);ctx.lineCap='round';
+        let lx=startX,ly=startY;ctx.beginPath();ctx.moveTo(lx,ly);
+        const segs=6;for(let j=1;j<=segs;j++){const t=j/segs;const bx=startX+(px-startX)*t,by=startY+(py-startY)*t;const jx=(-Math.sin(ang))*(Math.random()-0.5)*W*0.04,jy=(Math.cos(ang))*(Math.random()-0.5)*W*0.04;ctx.lineTo(bx+jx,by+jy);}ctx.stroke();
+        // bright core + spark head
+        ctx.strokeStyle='#eaffff';ctx.lineWidth=Math.max(1,W*0.002);ctx.stroke();
+        ctx.fillStyle='#cfeeff';ctx.beginPath();ctx.arc(px,py,Math.max(3,W*0.012*(1-fp*0.5)),0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      } else if(rw.form==='slingshot'){
+        // a small tumbling stone
+        const px=startX+(tgtX-startX)*(fp*1.3), py=startY+(tgtY-startY)*(fp*1.3);
+        ctx.save();ctx.globalAlpha=1-fp*0.7;ctx.fillStyle='#b8b0a0';ctx.beginPath();ctx.arc(px,py,Math.max(2,W*0.01*(1-fp*0.5)),0,Math.PI*2);ctx.fill();ctx.restore();
+      } else {
+        drawStreak(startX,startY,streakCol);
+      }
+    }
     if(rw.form==='crossbow'){
       // ===== crossbow: front portion visible in the lower-right; the butt runs OFF-SCREEN =====
       // The grip/butt sits past the bottom-right corner (cut off by the frame), so we only see
@@ -1228,18 +1480,66 @@ function renderHand(){
       const latchX=cx-dx*latchBack, latchY=cy-dy*latchBack;
       ctx.strokeStyle=str;ctx.lineWidth=Math.max(2,W*0.0035);
       ctx.beginPath();ctx.moveTo(armTopX,armTopY);ctx.lineTo(latchX,latchY);ctx.lineTo(armBotX,armBotY);ctx.stroke();
-      // ---- bolt: SHORT shaft on the rail, head pointing forward (up-left) toward the crosshair ----
-      const boltLen=reach*0.5;                           // short — sits on the rail, foreshortened
-      const boltBackX=latchX, boltBackY=latchY;          // tail at the latch (recedes with draw)
-      const boltHeadX=cx+dx*boltLen*0.5, boltHeadY=cy+dy*boltLen*0.5;   // head just past the prod
-      ctx.strokeStyle=shaft;ctx.lineWidth=Math.max(3,W*0.006);
-      ctx.beginPath();ctx.moveTo(boltHeadX,boltHeadY);ctx.lineTo(boltBackX,boltBackY);ctx.stroke();
-      // bolt head (points forward, up-left)
-      ctx.fillStyle='#dfe6ea';ctx.save();ctx.translate(boltHeadX,boltHeadY);ctx.rotate(Math.atan2(dy,dx));ctx.beginPath();ctx.moveTo(lw*1.0,0);ctx.lineTo(-lw*0.4,-lw*0.7);ctx.lineTo(-lw*0.4,lw*0.7);ctx.closePath();ctx.fill();ctx.restore();
+      // ---- bolt: SHORT shaft on the rail, head pointing forward; hidden while flying away ----
+      if(player.fireAnim<=0){
+        const boltLen=reach*0.5;                           // short — sits on the rail, foreshortened
+        const boltBackX=latchX, boltBackY=latchY;          // tail at the latch (recedes with draw)
+        const boltHeadX=cx+dx*boltLen*0.5, boltHeadY=cy+dy*boltLen*0.5;   // head just past the prod
+        ctx.strokeStyle=shaft;ctx.lineWidth=Math.max(3,W*0.006);
+        ctx.beginPath();ctx.moveTo(boltHeadX,boltHeadY);ctx.lineTo(boltBackX,boltBackY);ctx.stroke();
+        // bolt head (points forward, up-left)
+        ctx.fillStyle='#dfe6ea';ctx.save();ctx.translate(boltHeadX,boltHeadY);ctx.rotate(Math.atan2(dy,dx));ctx.beginPath();ctx.moveTo(lw*1.0,0);ctx.lineTo(-lw*0.4,-lw*0.7);ctx.lineTo(-lw*0.4,lw*0.7);ctx.closePath();ctx.fill();ctx.restore();
+      }
       // (no hand/trigger drawn — the grip and butt run off-screen past the lower-right corner)
       return;
     }
-    // ===== BOW: tall & upright on the RIGHT edge, arrow lies horizontal pointing LEFT to the crosshair =====
+    if(rw.form==='slingshot'){
+      // ===== slingshot: Y-fork in the lower-right, elastic band pulled back when drawn =====
+      const fx=W*0.7+bob*0.4, fy=H*0.74+switchDip;     // fork base
+      const fl=H*0.22;                                  // fork length
+      ctx.strokeStyle=woodL;ctx.lineWidth=Math.max(5,W*0.016);ctx.lineCap='round';
+      // handle
+      ctx.beginPath();ctx.moveTo(fx,fy+fl*0.6);ctx.lineTo(fx,fy);ctx.stroke();
+      // two prongs
+      const ptlx=fx-W*0.07,ptly=fy-fl*0.7, ptrx=fx+W*0.07,ptry=fy-fl*0.7;
+      ctx.beginPath();ctx.moveTo(fx,fy);ctx.lineTo(ptlx,ptly);ctx.moveTo(fx,fy);ctx.lineTo(ptrx,ptry);ctx.stroke();
+      // elastic band + pouch (pulls back toward you with draw)
+      if(player.fireAnim<=0){
+        const pull=draw*W*0.10;const px=(ptlx+ptrx)/2,py=(ptly+ptry)/2+pull;
+        ctx.strokeStyle='#6a4a3a';ctx.lineWidth=Math.max(2,W*0.004);
+        ctx.beginPath();ctx.moveTo(ptlx,ptly);ctx.lineTo(px,py);ctx.lineTo(ptrx,ptry);ctx.stroke();
+        // stone in pouch
+        ctx.fillStyle='#b8b0a0';ctx.beginPath();ctx.arc(px,py,Math.max(3,W*0.012),0,Math.PI*2);ctx.fill();
+      }
+      // skin-tone hand on the handle
+      ctx.fillStyle=skinTone;ctx.fillRect(fx-W*0.03,fy+fl*0.3,W*0.06,fl*0.4);
+      return;
+    }
+    if(rw.form==='wizstaff'){
+      // ===== wizard staff: long diagonal staff with a crackling electric orb at the tip =====
+      const bxs=W*0.82+bob*0.4, byb=H*1.05;             // butt near lower-right
+      const txs=W*0.5, tyt=H*0.2+switchDip;             // crystal tip toward upper-center
+      ctx.strokeStyle=wood;ctx.lineWidth=Math.max(6,W*0.02);ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(bxs,byb);ctx.lineTo(txs,tyt);ctx.stroke();
+      ctx.strokeStyle=woodL;ctx.lineWidth=Math.max(2,W*0.007);
+      ctx.beginPath();ctx.moveTo(bxs,byb);ctx.lineTo(txs,tyt);ctx.stroke();
+      // claw holding the orb
+      const ang=Math.atan2(tyt-byb,txs-bxs);
+      ctx.strokeStyle=rc;ctx.lineWidth=Math.max(3,W*0.012);
+      for(const s of [-1,1]){ctx.save();ctx.translate(txs,tyt);ctx.rotate(ang+s*0.6);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W*0.05,-W*0.02);ctx.stroke();ctx.restore();}
+      // electric orb (charges up as you draw)
+      const chg=0.5+0.5*draw, pulse=0.6+0.4*Math.sin(frame*0.4);
+      ctx.fillStyle='#6ad0ff';ctx.globalAlpha=0.4*pulse*chg;ctx.beginPath();ctx.arc(txs,tyt,W*0.07*chg,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+      ctx.fillStyle='#bfeaff';ctx.beginPath();ctx.arc(txs,tyt,W*0.035*chg,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(txs,tyt,W*0.016,0,Math.PI*2);ctx.fill();
+      // jagged lightning arcs around the orb
+      ctx.strokeStyle='#9ae0ff';ctx.lineWidth=Math.max(1.5,W*0.005);
+      for(let k=0;k<3;k++){const a0=frame*0.2+k*2.1;let lx=txs,ly=tyt;ctx.beginPath();ctx.moveTo(lx,ly);
+        for(let j=0;j<3;j++){lx+=Math.cos(a0+j)*W*0.03*(0.6+Math.random()*0.5);ly+=Math.sin(a0+j)*W*0.03*(0.6+Math.random()*0.5);ctx.lineTo(lx,ly);}ctx.globalAlpha=0.5+0.3*draw;ctx.stroke();ctx.globalAlpha=1;}
+      // hand grip
+      ctx.fillStyle=skinTone;const gx=bxs+(txs-bxs)*0.32,gy=byb+(tyt-byb)*0.32;ctx.save();ctx.translate(gx,gy);ctx.rotate(ang);ctx.fillRect(-W*0.018,-W*0.03,W*0.05,W*0.06);ctx.restore();
+      return;
+    }
     const bx=W*0.90+bob*0.4;                          // bow vertical line hugs the right edge
     const cy=H*0.52+bob*0.6+switchDip;                // vertical center
     const bh=H*0.78, bw=W*0.07;                        // bow height; how far the limb bows left
@@ -1257,20 +1557,25 @@ function renderHand(){
     const nockX=bx+pull;
     ctx.strokeStyle=str;ctx.lineWidth=Math.max(2,W*0.004);
     ctx.beginPath();ctx.moveTo(bx,top);ctx.lineTo(nockX,cy);ctx.lineTo(bx,btm);ctx.stroke();
-    // ---- arrow: a FIXED-LENGTH shaft nocked to the string; the whole arrow slides right as you draw ----
-    const aLen=bw*3.4;                                 // constant arrow length
-    const aTailX=nockX;                                // back of arrow sits at the nock (moves right w/ draw)
-    const aHeadX=aTailX-aLen;                          // head is a fixed distance ahead — moves right too
-    ctx.fillStyle=shaft;ctx.fillRect(aHeadX,cy-lw*0.28,aLen,lw*0.56);
-    // arrowhead (points left)
-    ctx.fillStyle='#dfe6ea';ctx.beginPath();ctx.moveTo(aHeadX-lw*0.9,cy);ctx.lineTo(aHeadX,cy-lw*0.7);ctx.lineTo(aHeadX,cy+lw*0.7);ctx.closePath();ctx.fill();
-    // fletching at the nock end
-    ctx.fillStyle=horn;ctx.fillRect(aTailX-lw*0.2,cy-lw*0.7,lw*0.7,lw*1.4);
+    // ---- arrow(s): nocked to the string; hidden while flying. Trinity bow nocks THREE. ----
+    if(player.fireAnim<=0){
+      const aLen=bw*3.4;                                 // constant arrow length
+      const aTailX=nockX;                                // back of arrow sits at the nock
+      const aHeadX=aTailX-aLen;                          // head a fixed distance ahead
+      const offs=rw.form==='trinitybow'?[-lw*1.3,0,lw*1.3]:[0];   // 3 arrows fan vertically
+      for(const oy of offs){
+        ctx.fillStyle=shaft;ctx.fillRect(aHeadX,cy+oy-lw*0.24,aLen,lw*0.48);
+        // arrowhead (points left)
+        ctx.fillStyle='#dfe6ea';ctx.beginPath();ctx.moveTo(aHeadX-lw*0.9,cy+oy);ctx.lineTo(aHeadX,cy+oy-lw*0.6);ctx.lineTo(aHeadX,cy+oy+lw*0.6);ctx.closePath();ctx.fill();
+        // fletching at the nock end
+        ctx.fillStyle=horn;ctx.fillRect(aTailX-lw*0.2,cy+oy-lw*0.6,lw*0.7,lw*1.2);
+      }
+    }
     // ---- draw hand gripping the nock (skin-tone fist), pulls back with the string ----
     const hs=Math.max(7,W*0.018);
-    ctx.fillStyle='#caa46a';ctx.fillRect(nockX-hs*0.4,cy-hs,hs*1.5,hs*2);
-    ctx.fillStyle=shade('#caa46a',1.15);ctx.fillRect(nockX-hs*0.4,cy-hs,hs*1.5,hs*0.5);
-    ctx.fillStyle=shade('#caa46a',0.82);ctx.fillRect(nockX-hs*0.4,cy+hs*0.5,hs*1.5,hs*0.5);
+    ctx.fillStyle=skinTone;ctx.fillRect(nockX-hs*0.4,cy-hs,hs*1.5,hs*2);
+    ctx.fillStyle=shade(skinTone,1.15);ctx.fillRect(nockX-hs*0.4,cy-hs,hs*1.5,hs*0.5);
+    ctx.fillStyle=shade(skinTone,0.82);ctx.fillRect(nockX-hs*0.4,cy+hs*0.5,hs*1.5,hs*0.5);
     return;
   }
 
@@ -1279,7 +1584,7 @@ function renderHand(){
     const td=THROW_DEF[activeThrow];const avail=(game.throwables[activeThrow]||0)>0;
     const windback=attackHeld?charge:0;
     const hx=W*0.66+windback*W*0.06+Math.sin(walkPhase)*W*0.01, hy=H-H*0.16+bob+switchDip-windback*H*0.1;
-    ctx.fillStyle='#caa46a';ctx.fillRect(hx-w0(0.04),hy,w0(0.10),H*0.2);  // forearm
+    ctx.fillStyle=skinTone;ctx.fillRect(hx-w0(0.04),hy,w0(0.10),H*0.2);  // forearm
     ctx.save();ctx.translate(hx,hy-H*0.02);ctx.rotate(-windback*0.8);
     if(!avail)ctx.globalAlpha=0.35;
     if(td.form==='bomb'){ctx.fillStyle='#2a2a2a';ctx.beginPath();ctx.arc(0,0,W*0.03,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e0b13c';ctx.fillRect(-W*0.006,-W*0.045,W*0.012,W*0.018);}
@@ -1290,19 +1595,26 @@ function renderHand(){
 
   // ----- MELEE (default) -----
   const eq=game.equip.weapon?lootById(game.equip.weapon):null;
+  const mform=eq?eq.form:'sword';
   // wind-up: as you hold (charge), the weapon cocks BACK and UP, ready to strike
   const windup=charge;                                  // 0..1 hold progress
-  const swingLift=Math.abs(Math.sin(swing))*H*0.18, chargeLift=windup*H*0.10;
-  const sideTravel=Math.sin(swing)*slashDir*W*0.07 - windup*W*0.05;   // pull back-right during windup
-  let baseY=H-H*0.06-swingLift-chargeLift+bob+switchDip;
-  let x=W*0.58+sideTravel, w=W*0.27, h=H*0.68;          // LARGER weapon
+  // per-form swing flavor: thrust (spear/longspear), chop (mace), quick slash (knives), sweep (windstaff)
+  const isThrust=(mform==='spear'||mform==='longspear');
+  const isKnives=(mform==='knives');
+  const liftMag=mform==='flail'?0.30:(isKnives?0.0:(isThrust?0.06:0.18));
+  const thrust=isThrust?Math.sin(swing)*H*0.16:0;        // forward lunge for thrust weapons
+  const swingLift=Math.abs(Math.sin(swing))*H*liftMag, chargeLift=windup*H*0.10;
+  const sideTravel=isKnives?0:(Math.sin(swing)*slashDir*W*0.07*(isThrust?0.3:1) - windup*W*0.05);   // pull back-right during windup
+  let baseY=H-H*0.06-swingLift-chargeLift+bob+switchDip+thrust;
+  let x=W*0.58+sideTravel, w=W*0.27, h=H*0.92;          // longer reach, original width
   if(player.dodgeT>0)baseY+=H*0.08;
   const col=eq?RC[eq.rarity]:'#c8c8c8';
   const colL=shade(col,1.35), colD=shade(col,0.6);
-  const woodG='#6b4a2b', woodGD='#4a3320', woodGL='#8a6238', leather='#caa46a', steel='#c9d2da', steelD='#7d8893';
+  const woodG='#6b4a2b', woodGD='#4a3320', woodGL='#8a6238', leather=skinTone, steel='#c9d2da', steelD='#7d8893';
   // rotate the whole weapon: cock back (+) during wind-up, snap forward (−) during the swing
-  const swingRot = -Math.sin(swing)*slashDir*0.7;       // swing arc
-  const windRot  = windup*0.5;                          // cocked-back tilt
+  const swingMag=mform==='flail'?0.35:(isKnives?0:(mform==='windstaff'?1.15:(isThrust?0.18:0.7)));
+  const swingRot = -Math.sin(swing)*slashDir*swingMag;  // swing arc (form-specific amplitude)
+  const windRot  = isKnives?0:(windup*0.5);             // cocked-back tilt (knives handle their own)
   ctx.save();
   ctx.translate(x+w*0.47, baseY);
   ctx.rotate(windRot+swingRot);
@@ -1315,6 +1627,18 @@ function renderHand(){
   ctx.fillStyle=shade(leather,0.82);ctx.fillRect(x+w*0.52,baseY-h*0.02,w*0.12,h*0.52);
 
   const cxw=x+w*0.47;  // weapon centerline x (in the grip)
+
+  // ---- legendary/mythic aura: a soft pulsing glow behind the weapon ----
+  if(eq&&(eq.rarity==='legendary'||eq.rarity==='mythic')){
+    const auraCol=RC[eq.rarity], gy=baseY-h*0.45, pulse=0.5+0.5*Math.sin(frame*0.12);
+    const gr=ctx.createRadialGradient(cxw,gy,0,cxw,gy,w*0.9);
+    gr.addColorStop(0,auraCol);gr.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.save();ctx.globalAlpha=(eq.rarity==='mythic'?0.30:0.22)*(0.7+0.3*pulse);ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=gr;ctx.beginPath();ctx.arc(cxw,gy,w*0.9,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+    // a few drifting sparks for mythic
+    if(eq.rarity==='mythic'){ctx.save();ctx.globalCompositeOperation='lighter';for(let k=0;k<4;k++){const a=frame*0.05+k*1.57;ctx.globalAlpha=0.4+0.4*Math.sin(frame*0.1+k);ctx.fillStyle=auraCol;ctx.fillRect(cxw+Math.cos(a)*w*0.5,gy+Math.sin(a)*h*0.3,3,3);}ctx.restore();}
+  }
 
   if(eq&&eq.form==='axe'){
     // haft
@@ -1338,8 +1662,23 @@ function renderHand(){
     ctx.fillStyle=colD;ctx.beginPath();ctx.ellipse(cxw,hy,w*0.22,h*0.16,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(cxw-w*0.02,hy-h*0.01,w*0.18,h*0.13,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle=colL;ctx.beginPath();ctx.ellipse(cxw-w*0.07,hy-h*0.05,w*0.06,h*0.045,0,0,Math.PI*2);ctx.fill();
-    // studs/spikes
-    ctx.fillStyle=steel;for(let k=0;k<5;k++){const a=k/5*Math.PI*2+0.4;ctx.beginPath();ctx.arc(cxw+Math.cos(a)*w*0.15,hy+Math.sin(a)*h*0.11,w*0.028,0,Math.PI*2);ctx.fill();}
+    // radiating spikes (instead of round studs) — triangles pointing outward from the head
+    const spikeN=8, rx=w*0.17, ry=h*0.125;
+    for(let k=0;k<spikeN;k++){const a=k/spikeN*Math.PI*2+0.3;
+      const bx0=cxw+Math.cos(a)*rx, by0=hy+Math.sin(a)*ry;          // base on the head rim
+      const tx=cxw+Math.cos(a)*rx*1.7, ty=hy+Math.sin(a)*ry*1.7;    // spike tip outward
+      const pa=a+Math.PI/2, half=w*0.035;                           // base half-width
+      ctx.fillStyle=steel;ctx.beginPath();
+      ctx.moveTo(bx0+Math.cos(pa)*half, by0+Math.sin(pa)*half);
+      ctx.lineTo(tx, ty);
+      ctx.lineTo(bx0-Math.cos(pa)*half, by0-Math.sin(pa)*half);
+      ctx.closePath();ctx.fill();
+      ctx.fillStyle=steelD;ctx.beginPath();                          // shaded half for depth
+      ctx.moveTo(bx0-Math.cos(pa)*half, by0-Math.sin(pa)*half);
+      ctx.lineTo(tx, ty);
+      ctx.lineTo((bx0+tx)/2, (by0+ty)/2);
+      ctx.closePath();ctx.fill();
+    }
   }
   else if(eq&&eq.form==='spear'){
     // long shaft
@@ -1352,6 +1691,142 @@ function renderHand(){
     ctx.fillStyle=colL;ctx.fillRect(cxw-w*0.008,sy-h*0.16,w*0.016,h*0.18);   // central ridge
     // collar
     ctx.fillStyle=steelD;ctx.fillRect(cxw-w*0.05,sy+h*0.03,w*0.1,h*0.04);
+  }
+  else if(eq&&eq.form==='flail'){
+    // ===== FLAIL: wooden handle + chain of links + spiked ball that whips out when swung =====
+    // handle (short)
+    ctx.fillStyle=woodG;ctx.fillRect(cxw-w*0.045,baseY-h*0.30,w*0.09,h*0.46);
+    ctx.fillStyle=woodGL;ctx.fillRect(cxw-w*0.045,baseY-h*0.30,w*0.03,h*0.46);
+    ctx.fillStyle=woodGD;ctx.fillRect(cxw-w*0.045,baseY+h*0.10,w*0.09,h*0.06);   // pommel
+    // pivot at the top of the handle
+    const pivX=cxw, pivY=baseY-h*0.30;
+    // The ball swings as a PENDULUM: it starts cocked BACK (behind the shoulder), then sweeps
+    // DOWN and FORWARD through the strike, then settles hanging. swing runs PI→0 during an attack.
+    const sgn=slashDir;                               // which way this swing goes
+    const phase=swing/Math.PI;                        // 1 just after striking → 0 at rest
+    // angle sweeps from "back/up" (cocked) through "down" to "forward/up" as phase 1→0.
+    // base hang is straight up out of the hand (-PI/2). The arc swings ±~1.6rad around that.
+    const arc=Math.cos(phase*Math.PI);                // phase1→-1 (back), phase0.5→0 (down), phase0→+1 (forward)
+    const chainAng=(-Math.PI/2) + sgn*arc*1.6;        // full back→forward sweep
+    const whip=Math.sin(phase*Math.PI);               // centrifugal extension, peaks mid-swing
+    const chainLen=h*(0.40+whip*0.34);                // chain extends as it flies through the arc
+    const links=6;
+    let lx=pivX, ly=pivY;
+    const ex=pivX+Math.cos(chainAng)*chainLen, ey=pivY+Math.sin(chainAng)*chainLen;
+    // draw chain links along the pivot→ball line, with a slight catenary sag when at rest
+    ctx.lineCap='round';
+    for(let i=1;i<=links;i++){
+      const t=i/links;
+      const sag=(1-whip)*Math.sin(t*Math.PI)*h*0.05;  // sags when not swinging
+      const nx=pivX+(ex-pivX)*t, ny=pivY+(ey-pivY)*t+sag;
+      // link as a small metal ring
+      ctx.strokeStyle=i%2?'#9aa0a8':'#c9d2da';ctx.lineWidth=Math.max(2.5,w*0.022);
+      ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(nx,ny);ctx.stroke();
+      ctx.fillStyle='#7d8893';ctx.beginPath();ctx.arc(nx,ny,Math.max(1.6,w*0.014),0,Math.PI*2);ctx.fill();
+      lx=nx;ly=ny;
+    }
+    // spiked ball at the end
+    const br=w*0.16+h*0.02;
+    // spikes first (behind ball)
+    ctx.fillStyle=shade(col,0.85);
+    for(let k=0;k<8;k++){const a=k/8*Math.PI*2+frame*0.01;const tx=ex+Math.cos(a)*br*1.7,ty=ey+Math.sin(a)*br*1.7;const pa=a+Math.PI/2,hw=br*0.28;
+      ctx.beginPath();ctx.moveTo(ex+Math.cos(a)*br*0.8+Math.cos(pa)*hw,ey+Math.sin(a)*br*0.8+Math.sin(pa)*hw);
+      ctx.lineTo(tx,ty);
+      ctx.lineTo(ex+Math.cos(a)*br*0.8-Math.cos(pa)*hw,ey+Math.sin(a)*br*0.8-Math.sin(pa)*hw);ctx.closePath();ctx.fill();}
+    // ball body
+    ctx.fillStyle=shade(col,0.6);ctx.beginPath();ctx.arc(ex,ey,br,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(ex-br*0.15,ey-br*0.15,br*0.78,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=colL;ctx.beginPath();ctx.arc(ex-br*0.3,ey-br*0.3,br*0.3,0,Math.PI*2);ctx.fill();
+    // motion blur arc when whipping hard
+    if(whip>0.4){ctx.save();ctx.globalAlpha=whip*0.3;ctx.strokeStyle=col;ctx.lineWidth=br*1.4;ctx.lineCap='round';
+      ctx.beginPath();ctx.arc(pivX,pivY,chainLen,chainAng-sgn*0.8,chainAng);ctx.stroke();ctx.restore();}
+    // grip
+    ctx.fillStyle=leather;ctx.fillRect(cxw-w*0.045,baseY-h*0.04,w*0.09,h*0.16);
+  }
+  else if(eq&&eq.form==='longspear'){
+    // extra-long shaft running the full height
+    ctx.fillStyle=woodG;ctx.fillRect(cxw-w*0.035,baseY-h*0.92,w*0.07,h*1.08);
+    ctx.fillStyle=woodGL;ctx.fillRect(cxw-w*0.035,baseY-h*0.92,w*0.024,h*1.08);
+    const sy=baseY-h*0.92;
+    // long narrow spearhead
+    ctx.fillStyle=colD;ctx.beginPath();ctx.moveTo(cxw,sy-h*0.16);ctx.quadraticCurveTo(cxw+w*0.09,sy-h*0.02,cxw,sy+h*0.06);ctx.quadraticCurveTo(cxw-w*0.09,sy-h*0.02,cxw,sy-h*0.16);ctx.closePath();ctx.fill();
+    ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(cxw,sy-h*0.15);ctx.quadraticCurveTo(cxw+w*0.05,sy-h*0.02,cxw,sy+h*0.03);ctx.quadraticCurveTo(cxw-w*0.01,sy-h*0.02,cxw,sy-h*0.15);ctx.closePath();ctx.fill();
+    ctx.fillStyle=colL;ctx.fillRect(cxw-w*0.006,sy-h*0.14,w*0.012,h*0.18);
+    // side lugs (winged crossbar) — marks it as a longer polearm
+    ctx.fillStyle=steelD;ctx.fillRect(cxw-w*0.11,sy+h*0.05,w*0.22,h*0.03);
+    ctx.fillStyle=steel;ctx.fillRect(cxw-w*0.11,sy+h*0.05,w*0.22,h*0.012);
+  }
+  else if(eq&&eq.form==='knives'){
+    // ===== DUAL SHADOW DAGGERS — a hand at each bottom corner, stabbing forward & back in quick alternation =====
+    // swing runs ~PI→0 after an attack. Convert to a 0..1 strike phase; the two hands are OUT OF PHASE
+    // so they jab one-two in quick succession.
+    const phase=swing/Math.PI;                          // 1 just after striking → 0 at rest
+    for(const s of [-1,1]){
+      // left hand leads on one strike, right on the next (slashDir flips each attack)
+      const leads = (s===slashDir);
+      // each hand's stab: a sharp out-and-back. Lead hand peaks early, off-hand peaks slightly later.
+      const local = leads ? phase : Math.max(0, phase-0.35);   // off-hand delayed → one-two
+      const stab = Math.sin(Math.min(1,local*1.6)*Math.PI);    // 0→1→0 punch curve
+      const baseX = W*0.5 + s*W*0.30;                   // hand rooted near each bottom corner
+      const handBaseY = H*1.02;                          // just below the screen edge
+      // stab drives the hand UP toward the crosshair and slightly inward, then back
+      const hxk = baseX - s*stab*W*0.10;
+      const hyk = handBaseY - stab*H*0.42 - bob*0.5 + switchDip;
+      const ang = s*0.35 - s*stab*0.25;                  // angle in toward center, straightening as it thrusts
+      ctx.save();ctx.translate(hxk,hyk);ctx.rotate(ang);
+      const bw=W*0.05, bl=H*0.34;                        // blade half-width, length
+      // ---- forearm coming up from the corner ----
+      ctx.fillStyle=skinTone;ctx.fillRect(-W*0.045,H*0.04,W*0.09,H*0.30);
+      ctx.fillStyle=shade(skinTone,1.12);ctx.fillRect(-W*0.045,H*0.04,W*0.03,H*0.30);
+      ctx.fillStyle=shade(skinTone,0.82);ctx.fillRect(W*0.015,H*0.04,W*0.03,H*0.30);
+      // ---- fist ----
+      ctx.fillStyle=shade(skinTone,0.95);ctx.beginPath();ctx.ellipse(0,H*0.03,W*0.05,H*0.045,0,0,Math.PI*2);ctx.fill();
+      // ---- open knuckle-guard ring ----
+      ctx.strokeStyle=steelD;ctx.lineWidth=Math.max(3,W*0.012);ctx.lineCap='round';
+      ctx.beginPath();ctx.arc(0,H*0.0,W*0.045,-0.5,Math.PI+0.5);ctx.stroke();
+      ctx.strokeStyle=steel;ctx.lineWidth=Math.max(1.5,W*0.005);
+      ctx.beginPath();ctx.arc(0,H*0.0,W*0.045,-0.5,Math.PI+0.5);ctx.stroke();
+      ctx.fillStyle=steelD;ctx.fillRect(-bw*0.5,-H*0.01,bw,H*0.022);    // guard nub
+      // ---- broad leaf blade (points UP toward the enemy) ----
+      const tip=-bl;
+      ctx.fillStyle=colD;ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.quadraticCurveTo(-bw,-bl*0.42,-bw*0.5,-bl*0.78);
+      ctx.quadraticCurveTo(-bw*0.2,tip+bl*0.06,0,tip);
+      ctx.quadraticCurveTo(bw*0.2,tip+bl*0.06,bw*0.5,-bl*0.78);
+      ctx.quadraticCurveTo(bw,-bl*0.42,0,0);
+      ctx.closePath();ctx.fill();
+      ctx.fillStyle=col;ctx.beginPath();
+      ctx.moveTo(0,-bl*0.02);ctx.quadraticCurveTo(bw*0.7,-bl*0.42,bw*0.4,-bl*0.76);ctx.quadraticCurveTo(bw*0.15,tip+bl*0.06,0,tip);ctx.closePath();ctx.fill();
+      ctx.fillStyle=colL;ctx.beginPath();ctx.moveTo(0,-bl*0.1);ctx.lineTo(bw*0.06,-bl*0.4);ctx.lineTo(0,tip+bl*0.08);ctx.lineTo(-bw*0.06,-bl*0.4);ctx.closePath();ctx.fill();
+      // motion streak when thrusting hard
+      if(stab>0.5){ctx.globalAlpha=(stab-0.5)*0.8;ctx.strokeStyle=colL;ctx.lineWidth=Math.max(1,W*0.004);ctx.beginPath();ctx.moveTo(0,tip);ctx.lineTo(0,tip+H*0.1);ctx.stroke();ctx.globalAlpha=1;}
+      ctx.restore();
+    }
+  }
+  else if(eq&&eq.form==='windstaff'){
+    // tall staff with a swirling air crystal at the top; faint orbiting wind motes
+    ctx.fillStyle=woodG;ctx.fillRect(cxw-w*0.035,baseY-h*0.72,w*0.07,h*0.88);
+    ctx.fillStyle=woodGL;ctx.fillRect(cxw-w*0.035,baseY-h*0.72,w*0.024,h*0.88);
+    const ty=baseY-h*0.78;
+    // forked head holding the crystal
+    ctx.strokeStyle=col;ctx.lineWidth=Math.max(3,w*0.02);ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(cxw-w*0.02,ty+h*0.12);ctx.quadraticCurveTo(cxw-w*0.14,ty+h*0.02,cxw-w*0.05,ty-h*0.12);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cxw+w*0.02,ty+h*0.12);ctx.quadraticCurveTo(cxw+w*0.14,ty+h*0.02,cxw+w*0.05,ty-h*0.12);ctx.stroke();
+    // swirling crystal
+    const pulse=0.6+0.4*Math.sin(frame*0.18);
+    ctx.fillStyle='#9ae0ff';ctx.globalAlpha=0.5*pulse;ctx.beginPath();ctx.arc(cxw,ty,w*0.13,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+    ctx.fillStyle='#cfeeff';ctx.beginPath();ctx.arc(cxw,ty,w*0.07,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cxw-w*0.02,ty-h*0.01,w*0.03,0,Math.PI*2);ctx.fill();
+    // orbiting wind motes
+    ctx.strokeStyle='rgba(200,240,255,0.6)';ctx.lineWidth=Math.max(1.5,w*0.008);
+    for(let k=0;k<3;k++){const a0=frame*0.06+k*2.1;ctx.beginPath();ctx.arc(cxw,ty,w*0.18+k*w*0.03,a0,a0+1.4);ctx.stroke();}
+    // gale trail during the swing — sweeping arcs trailing the crystal
+    if(swing>0.2){ctx.save();ctx.globalAlpha=Math.min(0.6,swing);ctx.strokeStyle='#cfeeff';ctx.lineWidth=Math.max(2,w*0.02);ctx.lineCap='round';
+      for(let k=0;k<4;k++){const r=w*(0.3+k*0.18);ctx.globalAlpha=Math.min(0.5,swing)*(1-k*0.2);ctx.beginPath();ctx.arc(cxw,ty,r,-2.4*slashDir-0.3,-2.4*slashDir+1.0);ctx.stroke();}
+      ctx.restore();}
+    // grip
+    ctx.fillStyle=leather;ctx.fillRect(cxw-w*0.035,baseY-h*0.02,w*0.07,h*0.16);
   }
   else{ // SWORD (default)
     const by=baseY-h*0.04;
@@ -1382,10 +1857,12 @@ function renderSlash(){
 }
 /* ============ COMBAT ============ */
 const COMBO_WINDOW=42,COMBO_MULT=[1.0,1.18,1.5],CHARGE_MAX=48;
-function weaponReach(){const w=game.equip.weapon?lootById(game.equip.weapon):null;if(!w)return 2.0;return w.form==='spear'?3.0:(w.form==='club'?2.5:(w.form==='axe'?2.5:2.3));}
-function weaponArc(){const w=game.equip.weapon?lootById(game.equip.weapon):null;if(!w)return 0.5;return w.form==='spear'?0.32:(w.form==='axe'||w.form==='club'?0.85:0.6);}
-const MAX_PARTICLES=220,MAX_FLOATERS=24;
-function particleCap(){return perfLevel>=2?MAX_PARTICLES:(perfLevel===1?110:50);}
+function weaponReach(){const w=game.equip.weapon?lootById(game.equip.weapon):null;if(!w)return 2.0;
+  return w.form==='longspear'?4.2:(w.form==='spear'?3.0:(w.form==='windstaff'?2.8:(w.form==='club'||w.form==='axe'||w.form==='flail'?2.5:(w.form==='knives'?2.0:2.3))));}
+function weaponArc(){const w=game.equip.weapon?lootById(game.equip.weapon):null;if(!w)return 0.5;
+  return w.form==='longspear'?0.26:(w.form==='spear'?0.32:(w.form==='knives'?0.85:(w.form==='windstaff'?0.95:(w.form==='axe'||w.form==='club'||w.form==='flail'?0.85:0.6))));}
+const MAX_PARTICLES=140,MAX_FLOATERS=20;
+function particleCap(){return perfLevel>=2?MAX_PARTICLES:(perfLevel===1?80:40);}
 function particleBurst(wx,wy,n,col,spd,life){
   const cap=particleCap();
   if(particles.length>=cap)return;
@@ -1398,22 +1875,60 @@ function dealDamage(e,raw,opts){opts=opts||{};let dmg=raw,crit=opts.crit;
   e.hp-=dmg;e.hurt=opts.heavy?12:7;e.flinch=opts.heavy?14:6;
   const dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy)||1;const kb=(opts.heavy?0.55:0.28)*(e.def.boss?0.4:1);tryMoveEnemy(e,dx/d*kb,dy/d*kb);
   const blood=e.def.shape==='ghost'||e.def.shape==='wisp'?'#9ad0ff':'#b03020';
-  particleBurst(e.x,e.y,opts.heavy?14:7,blood,opts.heavy?0.14:0.09,opts.heavy?34:24);
+  particleBurst(e.x,e.y,opts.heavy?9:5,blood,opts.heavy?0.14:0.09,opts.heavy?30:22);
   if(e.shieldT>0||e.armorT>0)particleBurst(e.x,e.y,6,'#9ec8ef',0.08,18);
   addFloater(e.x,e.y,(crit?'✶':'')+dmg,crit?'#ffd24a':((e.shieldT>0||e.armorT>0)?'#9ec8ef':'#ffe6d6'),crit||opts.heavy);
-  hitstop=Math.max(hitstop,opts.heavy?6:(crit?5:3));shake=Math.max(shake,opts.heavy?7:(crit?5:3));
+  hitstop=opts.ranged?hitstop:Math.max(hitstop,opts.heavy?6:(crit?5:3));shake=Math.max(shake,opts.heavy?7:(crit?5:3));
   // lifesteal? none for now; enrage
   if(e.def.ability==='enrage'&&e.hp<e.maxhp*0.4&&!e.enraged){e.enraged=true;e.def={...e.def,dmg:e.def.dmg*1.5|0,speed:e.def.speed*1.4};showToast(e.def.name+' enrages!','#c1543a');}
   if(e.hp<=0){e.alive=false;onKill(e);}
 }
 function targetsInArc(reach,arc){const out=[];for(const e of enemies){if(!e.alive)continue;const{d,ang}=proj(e.x,e.y);if(d>reach||Math.abs(ang)>arc)continue;out.push({e,d,ang});}out.sort((a,b)=>(Math.abs(a.ang)+a.d*0.1)-(Math.abs(b.ang)+b.d*0.1));return out;}
+function knockback(e,force){const dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy)||1;const ux=dx/d,uy=dy/d;
+  // strong shove: store a decaying knockback velocity that gets applied each frame (respects walls/trees)
+  e.kbX=(e.kbX||0)+ux*force;e.kbY=(e.kbY||0)+uy*force;
+  e.flinch=Math.max(e.flinch,12);}
+function windGust(){ // visible wind-push: a burst of pale streaks fanning out ahead of the player
+  const a=player.ang;
+  const cap=particleCap();
+  let n=Math.min(10, cap-particles.length);              // respect the cap so rapid swings don't pile up
+  for(let k=0;k<n;k++){const spread=(Math.random()-0.5)*0.9;const sp=0.12+Math.random()*0.14;const life=16+Math.random()*8|0;
+    particles.push({x:player.x+Math.cos(a)*0.6,y:player.y+Math.sin(a)*0.6,vx:Math.cos(a+spread)*sp,vy:Math.sin(a+spread)*sp,life,max:life,col:Math.random()<0.5?'#cfeeff':'#9ad0ff',h:0.2+Math.random()*0.4,wind:true});}
+  windFlash=12;}
 function lightAttack(){const D=derived();
   if(player.cool>0||player.dodgeT>0)return;
+  const w=game.equip.weapon?lootById(game.equip.weapon):null;const form=w?w.form:'sword';
   if(player.comboT>0)player.combo=Math.min(player.combo+1,2);else player.combo=0;
   player.comboT=COMBO_WINDOW;player.cool=D.atkCD;slashArc=1;slashDir=player.combo%2===0?1:-1;swing=Math.PI/2;
+  // mace & windstaff swing slower and heavier; knives faster
+  if(form==='flail'){player.cool=Math.round(D.atkCD*1.7);swing=Math.PI*0.9;}
+  else if(form==='windstaff'){player.cool=Math.round(D.atkCD*1.4);swing=Math.PI*0.85;}
+  else if(form==='knives'){player.cool=Math.round(D.atkCD*0.7);}
   const base=(8+D.meleeBonus)*COMBO_MULT[player.combo];const crit=Math.random()<D.crit;
   const list=targetsInArc(weaponReach(),weaponArc());
-  if(list.length){dealDamage(list[0].e,crit?base*2:base,{crit});if(player.combo===2&&list[1])dealDamage(list[1].e,base*0.6,{});}else shake=Math.max(shake,1);
+  if(!list.length){shake=Math.max(shake,1);
+    if(form==='windstaff'){windGust();shake=Math.max(shake,4);}   // still show the gust on a whiff
+    return;}
+  if(form==='knives'){
+    // dual knives: two quick strikes — hits the two nearest targets (or same twice)
+    dealDamage(list[0].e,crit?base*1.6:base*0.8,{crit});
+    const second=list[1]||list[0];dealDamage(second.e,base*0.7,{crit:Math.random()<D.crit});
+  } else if(form==='flail'){
+    // whipping spiked ball: heavy slam with strong knockback
+    dealDamage(list[0].e,crit?base*2.4:base*1.4,{crit,heavy:true});
+    knockback(list[0].e,2.2);shake=Math.max(shake,6);
+    particleBurst(list[0].e.x,list[0].e.y,8,'#c9d2da',0.08,18);
+  } else if(form==='longspear'){
+    // line thrust: skewers up to 3 enemies in the narrow arc
+    let n=0;for(const T of list){if(n>=3)break;dealDamage(T.e,(crit&&n===0?base*2:base*(n===0?1:0.7)),{crit:crit&&n===0});n++;}
+  } else if(form==='windstaff'){
+    // sweeping gale: damages the arc and BLASTS everyone far back with a strong visible gust
+    windGust();shake=Math.max(shake,8);
+    for(const T of list){dealDamage(T.e,(crit&&T===list[0]?base*1.8:base),{crit:crit&&T===list[0]});knockback(T.e,5.0);}
+  } else {
+    // default sword/axe/club/spear
+    dealDamage(list[0].e,crit?base*2:base,{crit});if(player.combo===2&&list[1])dealDamage(list[1].e,base*0.6,{});
+  }
 }
 function heavyAttack(frames){const D=derived();
   if(player.dodgeT>0)return;player.cool=Math.round(D.atkCD*2);player.combo=0;player.comboT=0;
@@ -1438,13 +1953,28 @@ function throwItem(){const kind=activeThrow;if((game.throwables[kind]||0)<=0){sh
   swing=Math.PI*0.5;updateThrowUI();saveGame();}
 function fireBow(draw){const rw=game.equip.ranged?lootById(game.equip.ranged):null;if(!rw)return;if(player.bowCool>0)return;
   draw=draw==null?1:Math.max(0.4,Math.min(1,draw));     // draw strength 0.4..1 from hold time
-  const D=derived();player.bowCool=rw.rate||32;player.bowAnim=10;
-  const spd=(rw.proj==='bolt'?0.34:0.28)*(0.7+draw*0.5);  // fuller draw = faster/farther
+  const D=derived();player.bowCool=rw.rate||32;player.bowAnim=10;player.fireAnim=8;
+  const form=rw.form;
+  const spd=(form==='spark'?0.40:rw.proj==='bolt'?0.34:form==='slingshot'?0.30:0.28)*(0.7+draw*0.5);
   const dmg=Math.round(((rw.stats&&rw.stats.rdmg||0)+D.throwBonus*0.6+5)*(0.6+draw*0.6));
-  const crit=Math.random()<D.crit+ (draw>=1?0.1:0);       // full draw improves crit
-  const a=player.ang+(Math.random()-0.5)*0.02*(1.4-draw); // full draw = tighter accuracy
-  pArrows.push({x:player.x+Math.cos(a)*0.5,y:player.y+Math.sin(a)*0.5,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:80,dmg:crit?Math.round(dmg*2):dmg,crit,col:rw.c,col2:'#e8e0c8',bolt:true,fh:0.5,pierce:rw.proj==='bolt'?1:0,hit:[]});
-  particleBurst(player.x+Math.cos(a)*0.6,player.y+Math.sin(a)*0.6,3,'#e8e0c8',0.05,10);}
+  const crit=Math.random()<D.crit+ (draw>=1?0.1:0);
+  const baseA=player.ang+(Math.random()-0.5)*0.02*(1.4-draw);
+  const mk=(a,extra)=>{if(pArrows.length>=40)return;const v=Math.cos(a),u=Math.sin(a);pArrows.push(Object.assign({x:player.x+v*0.5,y:player.y+u*0.5,vx:v*spd,vy:u*spd,life:80,dmg:crit?Math.round(dmg*2):dmg,crit,col:rw.c,col2:'#e8e0c8',bolt:true,fh:0.5,pierce:rw.proj==='bolt'?1:0,hit:[]},extra||{}));};
+  if(form==='trinitybow'){
+    // three arrows in a tight fan
+    mk(baseA);mk(baseA+0.12);mk(baseA-0.12);
+    particleBurst(player.x+Math.cos(baseA)*0.6,player.y+Math.sin(baseA)*0.6,5,'#ffe6a0',0.05,12);
+  } else if(form==='wizstaff'){
+    // arc of electricity: pierces many enemies AND deals splash at each hit
+    mk(baseA,{spark:true,pierce:6,col:'#7ad0ff',splash:1.6,splashDmg:Math.round(dmg*0.5)});
+    particleBurst(player.x+Math.cos(baseA)*0.6,player.y+Math.sin(baseA)*0.6,8,'#9ae0ff',0.08,14);
+  } else if(form==='slingshot'){
+    mk(baseA,{col:'#cfc6b0'});
+    particleBurst(player.x+Math.cos(baseA)*0.6,player.y+Math.sin(baseA)*0.6,2,'#cfc6b0',0.04,8);
+  } else {
+    mk(baseA);
+    particleBurst(player.x+Math.cos(baseA)*0.6,player.y+Math.sin(baseA)*0.6,3,'#e8e0c8',0.05,10);
+  }}
 
 /* ============ WEAPON MODES (F cycles; hold-release fires the active mode) ============ */
 let weaponMode='melee';   // 'melee' | 'ranged' | 'throwable'
@@ -1477,13 +2007,17 @@ function releaseAction(){
 
 /* ============ ENEMY AI (no movement/sight effects on player) ============ */
 function hurtPlayer(raw,opts){opts=opts||{};const D=derived();
-  if(player.dodgeT>14){addFloater(player.x+Math.cos(player.ang),player.y+Math.sin(player.ang),'dodge','#9ee6ff');return;}
-  if(Math.random()<D.dodge){addFloater(player.x+Math.cos(player.ang),player.y+Math.sin(player.ang),'evade','#9ee6ff');return;}
+  if(player.dodgeT>14){addFloater(player.x+Math.cos(player.ang),player.y+Math.sin(player.ang),'dodge','#9ee6ff');return 'dodged';}
+  if(Math.random()<D.dodge){addFloater(player.x+Math.cos(player.ang),player.y+Math.sin(player.ang),'evade','#9ee6ff');return 'dodged';}
   let dmg=raw*1.45,parried=false;   // mobs hit harder
   if(dmg>0){player.hp-=dmg;damageFlash=Math.max(damageFlash,10);shake=Math.max(shake,opts.heavy?6:3);addFloater(player.x+Math.cos(player.ang)*0.6,player.y+Math.sin(player.ang)*0.6,'-'+Math.round(dmg),'#ff7a5a');if(player.hp<=0){player.hp=0;endQuest(false);}}
   return parried;}
 function meleeHit(e){if(e.atkCool<=0){e.atkCool=45;e.lunge=10;hurtPlayer(e.def.dmg,{srcX:e.x,srcY:e.y,heavy:e.def.dmg>=14});}if(e.atkCool>0)e.atkCool--;}
 function fireProjectile(e,spread=0){const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1;let a=Math.atan2(dy,dx)+spread;particleBurst(e.x,e.y,4,e.def.col2,0.05,12);projectiles.push({x:e.x,y:e.y,vx:Math.cos(a)*0.12,vy:Math.sin(a)*0.12,life:130,dmg:e.def.dmg,col:e.def.col2});}
+// Cindermaw's molten lava lob — slower, glowing, applies a burn DoT on hit
+function fireLava(e,spread=0){const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1;let a=Math.atan2(dy,dx)+spread;
+  particleBurst(e.x,e.y,8,'#ff8a2a',0.09,18);particleBurst(e.x,e.y,5,'#ffd23a',0.06,14);
+  projectiles.push({x:e.x,y:e.y,vx:Math.cos(a)*0.10,vy:Math.sin(a)*0.10,life:150,dmg:e.def.dmg*0.7,col:'#ff7a2a',lava:true,trail:0});}
 // Bounds-safe solidity test — out-of-range always reads as a wall, never throws.
 function solidAt(px,py){const mx=px|0,my=py|0;if(mx<0||my<0||mx>=MAP_S||my>=MAP_S)return true;return map[my][mx]>0;}
 function tryMoveEnemy(e,dx,dy){
@@ -1516,11 +2050,37 @@ function updateEnemies(){
   for(const e of enemies){
     if(!e.alive)continue;if(e.hurt>0)e.hurt--;if(e.lunge>0)e.lunge--;
     if(e.shieldCool>0)e.shieldCool--;if(e.shieldT>0)e.shieldT--;if(e.armorT>0)e.armorT--;if(e.castCool>0)e.castCool--;if(e.healCool>0)e.healCool--;
+    // apply knockback impulse: shove back over several frames, sliding along walls/trees
+    if(e.kbX||e.kbY){
+      const step=0.34;                                   // fraction of remaining knockback applied this frame
+      const mx=e.kbX*step, my=e.kbY*step;
+      if(!solidAt(e.x+mx,e.y)&&!treeBlocked(e.x+mx,e.y))e.x+=mx; else e.kbX=0;
+      if(!solidAt(e.x,e.y+my)&&!treeBlocked(e.x,e.y+my))e.y+=my; else e.kbY=0;
+      e.kbX*=(1-step);e.kbY*=(1-step);
+      if(Math.abs(e.kbX)<0.02)e.kbX=0;if(Math.abs(e.kbY)<0.02)e.kbY=0;
+      if((e.kbX||e.kbY)){e.flinch=Math.max(e.flinch,2);continue;}   // still flying back — skip AI this frame
+    }
     if(e.flinch>0){e.flinch--;const bx=e.x-player.x,by=e.y-player.y,bd=Math.hypot(bx,by)||1;tryMoveEnemy(e,bx/bd*0.02,by/bd*0.02);continue;}
     const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1;const ux=dx/d,uy=dy/d;let spd=e.def.speed;
     if(e.def.ability==='shield'&&e.shieldCool<=0&&e.hp<e.maxhp*0.7){e.shieldT=120;e.shieldCool=320;}
     if(e.def.ability==='armor'&&e.armorT<=0&&e.castCool<=0){e.armorT=150;e.castCool=260;}
     if(e.def.ability==='heal'&&e.healCool<=0){const ally=enemies.find(o=>o.alive&&o!==e&&o.hp<o.maxhp&&Math.hypot(o.x-e.x,o.y-e.y)<5);if(ally){ally.hp=Math.min(ally.maxhp,ally.hp+14);e.healCool=200;particleBurst(ally.x,ally.y,6,'#8ad0a0',0.05,20);}}
+    // Cindermaw: hurls molten lava. Winds up (telegraph), then lobs a spread; enraged below half HP.
+    if(e.def.ability==='lava'){
+      const frenzied=e.hp<e.maxhp*0.5;
+      if(e.lavaWind>0){e.lavaWind--;
+        // glowing telegraph embers while winding up
+        if(e.lavaWind%3===0)particleBurst(e.x,e.y-0.3,3,'#ff8a2a',0.04,12);
+        if(e.lavaWind===1){
+          fireLava(e);
+          if(frenzied){fireLava(e,0.28);fireLava(e,-0.28);fireLava(e,0.56);fireLava(e,-0.56);}
+          else{fireLava(e,0.22);fireLava(e,-0.22);}
+          showToast(e.def.name+' hurls molten lava!','#ff7a2a');
+        }
+      } else if(e.castCool<=0 && d<11){
+        e.lavaWind=frenzied?22:30; e.castCool=frenzied?80:130;
+      }
+    }
     const mv=e.def.move;
     if(mv==='drift'){e.phase+=0.05;const px=Math.cos(e.phase)*0.6,py=Math.sin(e.phase*1.3)*0.6;tryMoveEnemy(e,(ux*0.4+px*0.02)*spd*0.96,(uy*0.4+py*0.02)*spd*0.96);if(d<4&&e.castCool<=0){e.windup=26;e.castCool=100;}if(e.windup>0){e.windup--;if(e.windup===1)fireProjectile(e);}}
     else if(mv==='flit'){e.phase+=0.3;tryMoveEnemy(e,(ux+Math.cos(e.phase)*0.8)*spd*0.96,(uy+Math.sin(e.phase)*0.8)*spd*0.96);if(d<1.1)meleeHit(e);}
@@ -1535,8 +2095,18 @@ function updateEnemies(){
     else if(mv==='serpent'){e.phase+=0.1;const tx=-uy,ty=ux;tryMoveEnemy(e,(ux*0.8+tx*Math.sin(e.phase)*0.5)*spd,(uy*0.8+ty*Math.sin(e.phase)*0.5)*spd);if(d>3&&e.castCool<=0){e.windup=24;e.castCool=80;}if(e.windup>0){e.windup--;if(e.windup===1){fireProjectile(e);fireProjectile(e,0.3);fireProjectile(e,-0.3);}}if(d<1.4)meleeHit(e);}
   }
   // enemy projectiles
-  for(const pr of projectiles){pr.x+=pr.vx;pr.y+=pr.vy;pr.life--;if((map[pr.y|0]&&map[pr.y|0][pr.x|0]>0)||treeBlocked(pr.x,pr.y)){particleBurst(pr.x,pr.y,5,pr.col,0.06,16);pr.life=0;}if(Math.hypot(pr.x-player.x,pr.y-player.y)<0.5){hurtPlayer(pr.dmg,{ranged:true,srcX:pr.x,srcY:pr.y});pr.life=0;}}
+  for(const pr of projectiles){pr.x+=pr.vx;pr.y+=pr.vy;pr.life--;
+    if(pr.lava){pr.trail=(pr.trail||0)+1;if(pr.trail%2===0)particleBurst(pr.x,pr.y,2,Math.random()<0.5?'#ff8a2a':'#ffd23a',0.02,10);}
+    if((map[pr.y|0]&&map[pr.y|0][pr.x|0]>0)||treeBlocked(pr.x,pr.y)){particleBurst(pr.x,pr.y,pr.lava?9:5,pr.col,0.07,18);pr.life=0;}
+    if(Math.hypot(pr.x-player.x,pr.y-player.y)<0.5){
+      const wasHit=hurtPlayer(pr.dmg,{ranged:true,srcX:pr.x,srcY:pr.y,lava:pr.lava});
+      if(pr.lava&&wasHit!=='dodged'){player.burnT=Math.max(player.burnT,180);particleBurst(player.x,player.y,12,'#ff7a2a',0.1,22);}
+      pr.life=0;}}
   projectiles=projectiles.filter(p=>p.life>0);
+  // burn damage-over-time (lava)
+  if(player.burnT>0){player.burnT--;player.burnTick=(player.burnTick||0)+1;
+    if(player.burnTick>=30){player.burnTick=0;const bd=Math.max(2,Math.round(player.maxhp*0.03));player.hp-=bd;damageFlash=Math.max(damageFlash,6);addFloater(player.x+Math.cos(player.ang)*0.5,player.y+Math.sin(player.ang)*0.5,'-'+bd+' 🔥','#ff8a2a');if(player.hp<=0){player.hp=0;endQuest(false);}}
+    if(player.burnT%4===0)particleBurst(player.x,player.y,1,'#ff8a2a',0.03,12);}
   // thrown player items
   for(const tw of thrown){tw.x+=tw.vx;tw.y+=tw.vy;tw.life--;let hit=false;
     if((map[tw.y|0]&&map[tw.y|0][tw.x|0]>0)||treeBlocked(tw.x,tw.y))hit=true;
@@ -1548,8 +2118,15 @@ function updateEnemies(){
   thrown=thrown.filter(t=>t.life>0);
   // player arrows/bolts
   for(const ar of pArrows){ar.x+=ar.vx;ar.y+=ar.vy;ar.life--;
-    if((map[ar.y|0]&&map[ar.y|0][ar.x|0]>0)||treeBlocked(ar.x,ar.y)){particleBurst(ar.x,ar.y,4,'#caa46a',0.05,12);ar.life=0;continue;}
-    for(const e of enemies){if(!e.alive||ar.hit.includes(e))continue;if(Math.hypot(e.x-ar.x,e.y-ar.y)<e.def.size*0.5+0.3){dealDamage(e,ar.dmg,{crit:ar.crit,ranged:true});ar.hit.push(e);if(ar.pierce>0){ar.pierce--;}else{ar.life=0;}break;}}}
+    if(ar.spark&&frame%5===0&&particles.length<particleCap())particleBurst(ar.x,ar.y,1,Math.random()<0.5?'#9ae0ff':'#cfeeff',0.02,8);
+    if((map[ar.y|0]&&map[ar.y|0][ar.x|0]>0)||treeBlocked(ar.x,ar.y)){particleBurst(ar.x,ar.y,ar.spark?7:4,ar.spark?'#9ae0ff':'#caa46a',0.05,12);ar.life=0;continue;}
+    for(const e of enemies){if(!e.alive||ar.hit.includes(e))continue;if(Math.hypot(e.x-ar.x,e.y-ar.y)<e.def.size*0.5+0.3){
+      dealDamage(e,ar.dmg,{crit:ar.crit,ranged:true});ar.hit.push(e);
+      if(ar.splash){ // wizard staff: electric splash to nearby enemies
+        particleBurst(e.x,e.y,10,'#9ae0ff',0.12,18);
+        for(const o of enemies){if(!o.alive||o===e||ar.hit.includes(o))continue;if(Math.hypot(o.x-e.x,o.y-e.y)<ar.splash){dealDamage(o,ar.splashDmg||Math.round(ar.dmg*0.5),{ranged:true});particleBurst(o.x,o.y,4,'#cfeeff',0.06,12);}}
+      }
+      if(ar.pierce>0){ar.pierce--;}else{ar.life=0;}break;}}}
   pArrows=pArrows.filter(a=>a.life>0);
   // particles & floaters
   for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vx*=0.9;p.vy*=0.9;p.life--;}particles=particles.filter(p=>p.life>0);
@@ -1572,18 +2149,21 @@ function onKill(e){game.xp+=e.xpScaled;quest.killed++;const D=derived();
   shake=Math.max(shake,e.def.boss?14:5);hitstop=Math.max(hitstop,e.def.boss?12:4);
   showToast('Slain: '+e.def.name+'  +'+e.xpScaled+' XP','#b3a984');checkLevel();if(quest.killed>=quest.total)endQuest(true);}
 function checkLevel(){const need=game.level*120;if(game.xp>=need){game.xp-=need;game.level++;const D=derived();player.maxhp=D.maxhp;player.hp=player.maxhp;showToast('LEVEL UP — Lv '+game.level,'#e0b13c');}}
-function startQuest(){const sc=logScore();const streak=streakCount();const t=tierFor(sc.pct,streak);const D=derived();
+function startQuest(){const sc=logScore();game.marchDays=(game.marchDays||0)+1;saveGame();const streak=streakCount()+game.marchDays;const t=tierFor(sc.pct,streak);const D=derived();
   curBiome=t.biome||'forest';
   buildForest(Math.min(48,10+t.idx*5));
-  player.x=MAP_S/2;player.y=MAP_S/2;player.ang=0;player.combo=0;player.comboT=0;player.blocking=false;player.blockT=0;player.dodgeT=0;player.stamina=player.maxstam=100;player.regenAcc=0;
+  player.x=MAP_S/2;player.y=MAP_S/2;player.ang=0;player.combo=0;player.comboT=0;player.blocking=false;player.blockT=0;player.dodgeT=0;player.stamina=player.maxstam=100;player.regenAcc=0;player.burnT=0;player.burnTick=0;
   attackHeld=false;attackHeldFrames=0;particles=[];floaters=[];thrown=[];pArrows=[];pickups=[];shake=0;hitstop=0;parryFlash=0;slashArc=0;player.bowCool=0;player.bowAnim=0;player.switchAnim=0;
   if(!modeAvailable(weaponMode))weaponMode='melee';
   player.maxhp=D.maxhp;player.hp=player.maxhp;player.cool=0;
   enemies=[];projectiles=[];motes=[];for(let i=0;i<50;i++)motes.push({x:2+Math.random()*(MAP_S-4),y:2+Math.random()*(MAP_S-4),h:0.1+Math.random()*0.35,ph:Math.random()*6});
   const count=Math.max(2,Math.min(24,Math.round(sc.done*1.3)+Math.max(0,t.idx-3)*2+1));
   const pool=MOBS.filter(m=>m.minTier<=t.idx&&!m.boss);const hasBoss=t.idx>=4;
+  // pick the boss whose tier band [bossTier, bossMax] contains the current tier
+  const bossDef=MOBS.filter(m=>m.boss&&t.idx>=m.bossTier&&t.idx<=(m.bossMax||99)).sort((a,b)=>b.bossTier-a.bossTier)[0]
+    ||MOBS.filter(m=>m.boss&&m.bossTier<=t.idx).sort((a,b)=>b.bossTier-a.bossTier)[0]||MOBS.find(m=>m.boss);
   const sBuff=1+Math.min(1.4,streak*0.05)+Math.max(0,t.idx-4)*0.28;   // tougher mobs at higher tiers
-  for(let i=0;i<count;i++){let def;if(hasBoss&&i===count-1)def=MOBS.find(m=>m.boss);else def=pool[Math.random()*pool.length|0];
+  for(let i=0;i<count;i++){let def;if(hasBoss&&i===count-1)def=bossDef;else def=pool[Math.random()*pool.length|0];
     let ex,ey,g=0;do{ex=2+Math.random()*(MAP_S-4);ey=2+Math.random()*(MAP_S-4);g++;}while(g<50&&(Math.hypot(ex-player.x,ey-player.y)<4||map[ey|0][ex|0]||treeBlocked(ex,ey)));
     enemies.push({def,x:ex,y:ey,hp:Math.round(def.hp*sBuff),maxhp:Math.round(def.hp*sBuff),xpScaled:Math.round(def.xp*sBuff),alive:true,hurt:0,flinch:0,lunge:0,atkCool:30+Math.random()*30|0,castCool:60+Math.random()*40|0,healCool:120,windup:0,charging:false,chargeT:0,diving:false,diveT:0,shieldT:0,shieldCool:120,armorT:0,enraged:false,phase:Math.random()*6,seed:Math.random()*6});}
   quest={tier:t,total:count,killed:0,streak,boss:hasBoss,score:sc};
@@ -1633,7 +2213,7 @@ function loop(ts){frame++;
   if(running){
     if(hitstop>0){hitstop--;drawScene();updateHUD();requestAnimationFrame(loop);return;}
     if(attackHeld){attackHeldFrames++;if(attackHeldFrames>CHARGE_MAX+30)attackHeldFrames=CHARGE_MAX+30;}
-    movePlayer();updateEnemies();if(player.cool>0)player.cool--;if(player.bowCool>0)player.bowCool--;if(player.bowAnim>0)player.bowAnim--;if(player.switchAnim>0)player.switchAnim--;if(swing>0)swing-=0.16;
+    movePlayer();updateEnemies();if(player.cool>0)player.cool--;if(player.bowCool>0)player.bowCool--;if(player.bowAnim>0)player.bowAnim--;if(player.fireAnim>0)player.fireAnim--;if(player.switchAnim>0)player.switchAnim--;if(swing>0)swing-=0.16;
     // view bob
     const moving=keys['w']||keys['a']||keys['s']||keys['d']||joyActive;bobZ=moving?Math.sin(walkPhase)*H*0.012:bobZ*0.9;
     drawScene();updateHUD();}
@@ -1644,6 +2224,11 @@ function drawScene(){
 let _vigCanvas=null,_vigW=0,_vigH=0;
 function drawOverlays(){
   if(damageFlash>0){ctx.fillStyle='rgba(193,84,58,'+(damageFlash/10*0.4)+')';ctx.fillRect(0,0,W,H);damageFlash--;}
+  if(windFlash>0){const wa=windFlash/12;ctx.save();ctx.globalAlpha=wa*0.22;ctx.strokeStyle='#cfeeff';ctx.lineWidth=2;
+    for(let k=0;k<6;k++){const yy=H*(0.2+k*0.12)+Math.sin(frame*0.5+k)*8;const off=(1-wa)*W*0.5;ctx.beginPath();ctx.moveTo(W*0.1+off,yy);ctx.lineTo(W*0.1+off+W*0.3,yy);ctx.stroke();}ctx.restore();windFlash--;}
+  if(player.burnT>0){const bf=0.10+0.06*Math.sin(frame*0.4);ctx.fillStyle='rgba(255,90,20,'+bf+')';ctx.fillRect(0,0,W,H);
+    // flame licks at the screen edges
+    ctx.fillStyle='rgba(255,140,40,'+(0.18+0.1*Math.sin(frame*0.5))+')';ctx.fillRect(0,H-H*0.06,W,H*0.06);}
   if(parryFlash>0){ctx.fillStyle='rgba(255,235,150,'+(parryFlash/14*0.35)+')';ctx.fillRect(0,0,W,H);parryFlash--;}
   if(player.dodgeT>0){}
   if(player.hp/player.maxhp<0.3){const pl=0.12+0.1*Math.sin(frame*0.2);ctx.fillStyle='rgba(150,20,20,'+pl+')';ctx.fillRect(0,0,W,H);}
@@ -1750,7 +2335,7 @@ function renderLog(){const list=document.getElementById('logList');const empty=d
       row.append(tick,lab,typ,del);list.appendChild(row);});});
   updateMeter();}
 function addGoal(type){ensureTracker();const inp=document.getElementById('newGoalInput');const label=inp.value.trim();if(!label)return;if(!tracker.items.custom)tracker.items.custom=[];tracker.items.custom.push({label,target:'',value:'',type});inp.value='';saveTracker();renderLog();}
-function updateMeter(){const sc=logScore();const streak=streakCount();const t=tierFor(sc.pct,streak);document.getElementById('meterPct').textContent=Math.round(sc.pct*100)+'%';document.getElementById('meterFill').style.width=(sc.pct*100)+'%';const tr=document.getElementById('tierReadout');if(sc.total===0)tr.innerHTML='Add vows to set difficulty — practice hunt is <b>Sunlit Clearing</b>';else{let extra='';if(sc.pct>=1){const nx=streak<1?'1-day streak → Blighted Tundra (frost)':streak<2?'2-day streak → Frozen Reach':streak<3?'3-day streak → Ashen Hollow':streak<4?'4-day streak → Nightmare (volcanic)':streak<5?'5-day streak → Cinder Wastes':streak<6?'6-day streak → Magma Vault':streak<7?'7-day streak → THE ABYSS':'max tier reached';extra='<br><span class="tiny" style="color:var(--gold)">🔥 '+streak+'-day streak · '+nx+'</span>';}tr.innerHTML='Difficulty: <b style="color:'+t.col+'">'+t.name+'</b><br><span class="tiny">'+sc.done+' of '+sc.total+' vows · tougher hunts drop richer loot</span>'+extra;}}
+function updateMeter(){const sc=logScore();const md=game.marchDays||0;const streak=streakCount()+md;const t=tierFor(sc.pct,streak);document.getElementById('meterPct').textContent=Math.round(sc.pct*100)+'%';document.getElementById('meterFill').style.width=(sc.pct*100)+'%';const tr=document.getElementById('tierReadout');if(sc.total===0)tr.innerHTML='Add vows to set difficulty — practice hunt is <b>Sunlit Clearing</b>';else{let band='';if(sc.pct>=1)band='100% → The Umbral Deep floor';else if(sc.pct>=0.84)band='84%+ → The Cinereal Waste';else if(sc.pct>=0.70)band='70%+ → Blighted Tundra';else if(sc.pct>=0.50)band='50%+ → Deep Thicket';else if(sc.pct>=0.25)band='25%+ → Forest Edge';else band='Sunlit Clearing';let extra='<br><span class="tiny" style="color:var(--gold)">🗡 Each March advances a day — '+md+' marched · deeper tiers await</span>';tr.innerHTML='Difficulty: <b style="color:'+t.col+'">'+t.name+'</b><br><span class="tiny">'+sc.done+' of '+sc.total+' vows · '+band+' · richer loot deeper in</span>'+extra;}}
 
 /* inventory */
 let invTab='gear',invSlot='weapon',dollAngle=0.2,selItem=null;
@@ -1926,6 +2511,19 @@ function drawDoll(){const cv=document.getElementById('dollCanvas'),x=cv.getConte
     if(wp.form==='axe'){x.fillStyle='#3a2d1d';x.fillRect(hx-p*0.3,topY+p*1,p*0.7,p*8);x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-facing*p*1.5,topY+p*1,p*2,p*2.5);}
     else if(wp.form==='club'){x.fillStyle='#3a2d1d';x.fillRect(hx-p*0.3,topY+p*3,p*0.7,p*6);x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-p*1.2,topY+p*0.5,p*2.4,p*3);}
     else if(wp.form==='spear'){x.fillStyle='#5a4a30';x.fillRect(hx-p*0.2,topY-p*2,p*0.5,p*12);x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-p*0.5,topY-p*3,p*1.1,p*2);}
+    else if(wp.form==='flail'){x.fillStyle='#5a4326';x.fillRect(hx-p*0.3,topY+p*3,p*0.7,p*5);
+      // chain up from the hand
+      x.fillStyle=sh2('#9aa0a8',sideShade);for(let i=0;i<4;i++)x.fillRect(hx-p*0.25+i*p*0.1,topY+p*2-i*p*0.9,p*0.5,p*0.6);
+      // spiked ball
+      const bx=hx+p*0.4,by=topY-p*1.5;x.fillStyle=sh2(shade(wc,0.8),sideShade);
+      for(let k=0;k<8;k++){const a=k/8*6.283;x.beginPath();x.moveTo(bx+Math.cos(a)*p*0.8,by+Math.sin(a)*p*0.8);x.lineTo(bx+Math.cos(a)*p*1.7,by+Math.sin(a)*p*1.7);x.lineTo(bx+Math.cos(a+0.4)*p*0.8,by+Math.sin(a+0.4)*p*0.8);x.closePath();x.fill();}
+      x.fillStyle=sh2(wc,sideShade);x.beginPath();x.arc(bx,by,p*1.1,0,7);x.fill();x.fillStyle=sh2(shade(wc,1.3),sideShade);x.beginPath();x.arc(bx-p*0.3,by-p*0.3,p*0.4,0,7);x.fill();}
+    else if(wp.form==='longspear'){x.fillStyle='#5a4a30';x.fillRect(hx-p*0.2,topY-p*4,p*0.5,p*15);x.fillStyle=sh2(wc,sideShade);x.beginPath();x.moveTo(hx+p*0.15,topY-p*5.5);x.lineTo(hx+p*0.9,topY-p*3.5);x.lineTo(hx+p*0.15,topY-p*2.5);x.lineTo(hx-p*0.6,topY-p*3.5);x.closePath();x.fill();x.fillStyle='#9aa0aa';x.fillRect(hx-p*1.2,topY-p*2.6,p*2.6,p*0.5);}
+    else if(wp.form==='knives'){for(const s of [-1,1]){const kx=hx+s*p*1.1;x.save();x.translate(kx,topY+p*3);x.rotate(s*0.3);
+      x.strokeStyle=sh2('#7d8893',sideShade);x.lineWidth=p*0.3;x.beginPath();x.arc(0,p*0.5,p*0.7,-0.5,Math.PI+0.5);x.stroke();
+      x.fillStyle=sh2(wc,sideShade);x.beginPath();x.moveTo(0,p*0.5);x.quadraticCurveTo(-p*0.8,-p*1,-p*0.4,-p*3);x.quadraticCurveTo(0,-p*4,0,-p*4.5);x.quadraticCurveTo(0,-p*4,p*0.4,-p*3);x.quadraticCurveTo(p*0.8,-p*1,0,p*0.5);x.closePath();x.fill();
+      x.fillStyle=sh2(shade(wc,1.4),sideShade);x.fillRect(-p*0.08,-p*3.5,p*0.16,p*3);x.restore();}}
+    else if(wp.form==='windstaff'){x.fillStyle='#5a4a30';x.fillRect(hx-p*0.2,topY-p*2,p*0.5,p*12);x.strokeStyle=sh2(wc,sideShade);x.lineWidth=p*0.4;x.beginPath();x.moveTo(hx-p*0.8,topY-p*2.5);x.quadraticCurveTo(hx-p*1.6,topY-p*4,hx-p*0.2,topY-p*4.5);x.moveTo(hx+p*0.8,topY-p*2.5);x.quadraticCurveTo(hx+p*1.6,topY-p*4,hx+p*0.2,topY-p*4.5);x.stroke();x.fillStyle='#9ae0ff';x.beginPath();x.arc(hx,topY-p*3.5,p*1.1,0,7);x.fill();x.fillStyle='#cfeeff';x.beginPath();x.arc(hx,topY-p*3.5,p*0.5,0,7);x.fill();}
     else{x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-p*0.3,topY-p*1,p*0.8,p*7);x.fillStyle='#5a4a30';x.fillRect(hx-p*0.8,topY+p*5.5,p*1.8,p*0.8);}}
   // ---- equipped ranged weapon in the other hand ----
   if(rng){const rc=rng.c,bx=cx-facing*p*2.0;
@@ -1950,6 +2548,9 @@ function drawDoll(){const cv=document.getElementById('dollCanvas'),x=cv.getConte
       x.fillStyle=sh2('#d7ccae',sideShade);x.fillRect(bx2-p*0.2,btm-p*2.2,p*0.4,p*3);
       x.fillStyle=sh2('#dfe6ea',sideShade);x.beginPath();x.moveTo(bx2,btm+p*1.4);x.lineTo(bx2-p*0.6,btm+p*0.4);x.lineTo(bx2+p*0.6,btm+p*0.4);x.closePath();x.fill();
     }
+    else if(rng.form==='slingshot'){x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.6;x.lineCap='round';x.beginPath();x.moveTo(bx,topY+p*9);x.lineTo(bx,topY+p*5);x.moveTo(bx,topY+p*5);x.lineTo(bx-p*1.6,topY+p*2);x.moveTo(bx,topY+p*5);x.lineTo(bx+p*1.6,topY+p*2);x.stroke();x.strokeStyle=sh2('#6a4a3a',sideShade);x.lineWidth=p*0.2;x.beginPath();x.moveTo(bx-p*1.6,topY+p*2);x.lineTo(bx,topY+p*3.5);x.lineTo(bx+p*1.6,topY+p*2);x.stroke();}
+    else if(rng.form==='wizstaff'){x.fillStyle=sh2('#5a4a30',sideShade);x.fillRect(bx-p*0.3,topY-p*1,p*0.6,p*11);x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.5;for(const s of [-1,1]){x.beginPath();x.moveTo(bx,topY-p*1);x.lineTo(bx+s*p*1.2,topY-p*2);x.stroke();}x.fillStyle='#6ad0ff';x.beginPath();x.arc(bx,topY-p*1.5,p*1.4,0,7);x.fill();x.fillStyle='#bfeaff';x.beginPath();x.arc(bx,topY-p*1.5,p*0.7,0,7);x.fill();x.strokeStyle='#9ae0ff';x.lineWidth=p*0.2;for(let k=0;k<3;k++){const a=k*2.1+0.5;x.beginPath();x.moveTo(bx,topY-p*1.5);x.lineTo(bx+Math.cos(a)*p*2,topY-p*1.5+Math.sin(a)*p*2);x.stroke();}}
+    else if(rng.form==='trinitybow'){x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.7;x.beginPath();x.moveTo(bx,topY+p*0.5);x.quadraticCurveTo(bx-facing*p*1.6,topY+p*4.5,bx,topY+p*8.5);x.stroke();x.strokeStyle=sh2('#e8e0c8',sideShade);x.lineWidth=p*0.2;x.beginPath();x.moveTo(bx,topY+p*0.5);x.lineTo(bx,topY+p*8.5);x.stroke();x.fillStyle=sh2('#dfe6ea',sideShade);for(const dy of [-1.5,0,1.5]){x.fillRect(bx-facing*p*2.5,topY+p*4.5+dy*p-p*0.1,p*2.5,p*0.3);}}
     else{x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.7;x.beginPath();x.moveTo(bx,topY+p*0.5);x.quadraticCurveTo(bx-facing*p*1.6,topY+p*4.5,bx,topY+p*8.5);x.stroke();x.strokeStyle=sh2('#e8e0c8',sideShade);x.lineWidth=p*0.2;x.beginPath();x.moveTo(bx,topY+p*0.5);x.lineTo(bx,topY+p*8.5);x.stroke();}}
   // ---- equipped trinket charm ----
   if(tr){const tc=tr.c;x.fillStyle=sh2(tc,sideShade*1.2);x.beginPath();x.arc(cx-facing*p*2.2,topY+p*5,p*0.8,0,7);x.fill();}
