@@ -196,6 +196,7 @@
     </div>
     <div class="btn-row" style="margin-top:0.5rem;">
       <button class="alt" id="welControlsBtn">Controls &amp; Help</button>
+      <button class="alt" id="welLoreBtn">Corvane's Tale</button>
     </div>
     <div class="tiny" id="welHint"></div>
   </div>
@@ -240,27 +241,43 @@
   </div>
 </div>
 
+<div class="panel scrim hidden" id="lorePanel">
+  <div style="display:flex;align-items:flex-start;justify-content:center;gap:0;max-width:900px;width:100%;">
+    <canvas id="crowCanvas" width="380" height="400" style="width:380px;height:400px;flex:0 0 auto;image-rendering:pixelated;margin-right:0.2rem;margin-top:-1.4rem;position:relative;z-index:2;filter:drop-shadow(0 8px 14px rgba(0,0,0,0.6));"></canvas>
+    <div class="card" style="flex:1 1 auto;max-width:660px;width:auto;position:relative;">
+      <div class="crest">Corvane, Herald of the Watch</div>
+      <div id="loreText" style="min-height:9.5em;font-size:1.06rem;line-height:1.62;color:#e7dcc2;text-align:left;padding:0.4rem 0.3rem 0.2rem;"></div>
+      <div id="loreDots" class="tiny" style="text-align:center;color:#6f6549;letter-spacing:0.4em;margin:0.5rem 0 0.2rem;"></div>
+      <div class="btn-row" style="justify-content:space-between;margin-top:0.9rem;">
+        <button class="mini alt" id="loreSkipBtn" style="opacity:0.7;">Skip</button>
+        <button id="loreNextBtn">Next ▸</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="panel scrim hidden" id="logPanel">
   <div class="card">
-    <div class="crest">Today's War-Log</div>
+    <div class="crest">The Eight Vows</div>
     <h2 id="logDate"></h2>
+    <div id="vowCount" class="tiny" style="text-align:center;color:var(--gold);margin-bottom:0.5rem;"></div>
     <div id="emptyNote" class="empty-note" style="display:none"></div>
     <div id="logList"></div>
-    <div class="add-row">
-      <input id="newGoalInput" placeholder="New vow…" maxlength="48">
-      <button class="mini" id="addDoBtn">+ Do</button>
-      <button class="mini alt" id="addAvoidBtn">+ Avoid</button>
+    <div class="add-row" id="addRow">
+      <input id="newGoalInput" placeholder="Speak a new vow…" maxlength="48">
+      <button class="mini" id="addDoBtn">+ Uphold</button>
+      <button class="mini alt" id="addAvoidBtn">+ Forswear</button>
     </div>
     <div class="meter">
-      <div class="meter-top"><span>Vows honored</span><b id="meterPct">0%</b></div>
+      <div class="meter-top"><span>Vows honored today</span><b id="meterPct">0%</b></div>
       <div class="meter-bar"><div class="meter-fill" id="meterFill"></div></div>
     </div>
     <div class="tier-readout" id="tierReadout"></div>
     <div class="btn-row">
-      <button id="marchBtn">March into the Forest</button>
+      <button id="marchBtn">March into the Reach</button>
       <button class="alt" id="backWelBtn">Back</button>
     </div>
-    <div class="tiny">Tick what you've done, rename by tapping the text, switch do/avoid with the tag, or add and remove vows. Everything syncs with your Daily Tracker. Completion sets the hunt's difficulty — you must log before you march.</div>
+    <div class="tiny" id="logHint"></div>
   </div>
 </div>
 
@@ -378,7 +395,7 @@ function skinUnlocked(s){
   if(s.unlock&&s.unlock.level)return game.level>=s.unlock.level;
   return false;
 }
-let game={xp:0,level:1,loot:[],equip:{weapon:null,ranged:null,armor:null,helm:null,trinket:null},throwables:{dagger:3,bomb:2},bestStreak:0,skin:'wanderer',skinsUnlocked:[],marchDays:0};
+let game={xp:0,level:1,loot:[],equip:{weapon:null,ranged:null,armor:null,helm:null,trinket:null},throwables:{dagger:3,bomb:2},bestStreak:0,skin:'wanderer',skinsUnlocked:[],marchDays:0,bossesDown:[],loreSeen:false};
 async function loadGame(){try{const v=await STORE.get('goalquest:v5');if(v)game=Object.assign(game,JSON.parse(v));}catch(e){}
   if(!game.equip)game.equip={weapon:null,ranged:null,armor:null,helm:null,trinket:null};
   if(game.equip.trinket===undefined)game.equip.trinket=null;
@@ -386,13 +403,33 @@ async function loadGame(){try{const v=await STORE.get('goalquest:v5');if(v)game=
   if(!game.throwables)game.throwables={dagger:3,bomb:2};
   if(!game.skin)game.skin='wanderer';
   if(!game.skinsUnlocked)game.skinsUnlocked=[];
-  if(game.marchDays===undefined)game.marchDays=0;}
+  if(game.marchDays===undefined)game.marchDays=0;
+  if(!game.bossesDown)game.bossesDown=[];
+  if(game.loreSeen===undefined)game.loreSeen=false;}
 async function saveGame(){try{await STORE.set('goalquest:v5',JSON.stringify(game));}catch(e){}}
+// The Eight Vows are hard-locked until every Demon Lord has fallen and the knight is fully ordained.
+const TOTAL_BOSSES=3;
+function allBossesDown(){return (game.bossesDown||[]).length>=TOTAL_BOSSES;}
+function vowsLocked(){return !allBossesDown();}   // locked to exactly 8 until the trial is complete
 
 function ensureTracker(){
   if(!tracker)tracker={items:{fitness:[],money:[],habits:[]},money:{cap:'',spent:''},checks:{},streakDates:[]};
   if(!tracker.items)tracker.items={fitness:[],money:[],habits:[]};
   if(!tracker.checks)tracker.checks={};if(!tracker.streakDates)tracker.streakDates=[];
+  // The Eight Vows live in a single list. Seed 8 blank vows the knight fills in themselves.
+  if(!tracker.items.custom)tracker.items.custom=[];
+  if(!tracker.vowsSeeded){
+    // migrate any pre-existing vows from old categories into the eight (preserving today's checks), then pad to 8
+    const existing=[];const k=todayKey();const oldChecks=(tracker.checks&&tracker.checks[k])||{};const newChecks={};
+    // keep any existing custom checks first
+    tracker.items.custom.forEach((it,i)=>{if(oldChecks['custom:'+i])newChecks['custom:'+i]=true;});
+    const merged=tracker.items.custom.map(it=>({label:it.label||'',type:it.type||'do'}));
+    for(const cat of ['fitness','money','habits']){if(tracker.items[cat]){tracker.items[cat].forEach((it,i)=>{const ni=merged.length;merged.push({label:it.label||'',type:it.type||'do'});if(oldChecks[cat+':'+i])newChecks['custom:'+ni]=true;});}tracker.items[cat]=[];}
+    while(merged.length<8)merged.push({label:'',type:'do'});
+    tracker.items.custom=merged;
+    if(tracker.checks)tracker.checks[k]=newChecks;
+    tracker.vowsSeeded=true;
+  }
 }
 const CAT_LABELS={fitness:'Fitness',money:'Money',habits:'Habits & Routines',custom:'Quests'};
 function logCats(){ensureTracker();const cats=[];const checks=tracker.checks[todayKey()]||{};
@@ -402,11 +439,11 @@ function logScore(){let total=0,done=0;const checks=(tracker&&tracker.checks&&tr
   if(tracker&&tracker.items)for(const key of Object.keys(tracker.items))tracker.items[key].forEach((it,i)=>{total++;if(checks[key+':'+i])done++;});
   return{done,total,pct:total?done/total:0};}
 function streakCount(){if(!tracker||!tracker.streakDates)return 0;let s=0,d=new Date();for(;;){const k=d.toISOString().slice(0,10);if(tracker.streakDates.includes(k)){s++;d.setDate(d.getDate()-1);}else break;}return s;}
-// 🥚 easter egg: a checked-off vow named exactly "becomemoho" (spaces/case ignored)
+// 🥚 easter egg: a checked-off vow named exactly "be like moho" (spaces/case ignored)
 function mohoVowChecked(){ensureTracker();const checks=tracker.checks[todayKey()]||{};
   for(const key of Object.keys(tracker.items)){const arr=tracker.items[key];for(let i=0;i<arr.length;i++){
     const nm=(arr[i].label||'').toLowerCase().replace(/\s+/g,'');
-    if(nm==='becomemoho'&&checks[key+':'+i])return true;}}
+    if(nm==='belikemoho'&&checks[key+':'+i])return true;}}
   return false;}
 function recomputeStreak(){const k=todayKey();let td=0,dd=0;const checks=tracker.checks[k]||{};
   for(const cat of Object.keys(tracker.items))tracker.items[cat].forEach((it,i)=>{if(it.type==='do'){td++;if(checks[cat+':'+i])dd++;}});
@@ -2183,6 +2220,7 @@ function updateEnemies(){
 }
 /* ============ QUEST ============ */
 function onKill(e){if(e._counted)return;e._counted=true;game.xp+=e.xpScaled;quest.killed++;const D=derived();
+  if(e.def.boss){if(!game.bossesDown)game.bossesDown=[];if(!game.bossesDown.includes(e.def.name)){game.bossesDown.push(e.def.name);saveGame();}}
   particleBurst(e.x,e.y,e.def.boss?40:18,e.def.shape==='ghost'||e.def.shape==='wisp'?'#bfe6ff':'#7a3528',e.def.boss?0.2:0.13,e.def.boss?50:34);
   particleBurst(e.x,e.y,e.def.boss?20:8,'#ffe6a0',0.1,30);
   addFloater(e.x,e.y,'+'+e.xpScaled+' XP','#ffe14a',e.def.boss);
@@ -2228,7 +2266,7 @@ function endQuest(won){if(!running)return;running=false;winPending=0;document.ge
         box.insertAdjacentHTML('beforeend','<div class="tier-readout" style="margin-top:0.6rem;border-color:'+got.glow+';color:'+got.glow+'">✦ ALIEN RELIC-SKIN UNLOCKED: <b>'+got.name+'</b><br><span class="tiny">Choose it at the start screen on your next run.</span></div>');}}
     sub.textContent='You cleared all '+quest.total+' foes of the '+quest.tier.name.replace(' — APEX HUNT','')+'. Streak, tier, and luck sharpened your spoils. Throwables restocked.';
     if(quest.streak>game.bestStreak)game.bestStreak=quest.streak;
-    // 🥚 "becomemoho" easter egg — checked-off vow + a win = the entire armory
+    // 🥚 "be like moho" easter egg — checked-off vow + a win = the entire armory
     if(mohoVowChecked()){
       let added=0;for(const it of LOOT){if(!game.loot.includes(it.id)){game.loot.push(it.id);added++;}}
       game.skinsUnlocked=SKINS.filter(s=>s.unlock==='mythic').map(s=>s.id);   // all alien skins too
@@ -2292,14 +2330,18 @@ function drawOverlays(){
 /* ============ INPUT ============ */
 let keys={},running=false,attackHeld=false,attackHeldFrames=0,winPending=0;
 const noTouch=matchMedia('(pointer:fine)').matches;if(noTouch)document.body.classList.add('no-touch');
-document.addEventListener('keydown',e=>{const k=e.key.toLowerCase();
+document.addEventListener('keydown',e=>{
+  const tn=(e.target&&e.target.tagName||'').toLowerCase();if(tn==='input'||tn==='textarea')return;   // let typing through
+  const k=e.key.toLowerCase();
   if((k==='control'||k==='c')&&running&&!keys['control']&&!keys['c'])dodge();
   if(k==='f'&&running&&!keys['f'])cycleMode();
   if(k==='1'&&running){weaponMode='throwable';activeThrow='dagger';setMode('throwable');}
   if(k==='2'&&running){weaponMode='throwable';activeThrow='bomb';setMode('throwable');}
   if(e.key===' '){e.preventDefault();if(running&&!attackHeld)beginAction();}
   keys[k]=true;});
-document.addEventListener('keyup',e=>{const k=e.key.toLowerCase();
+document.addEventListener('keyup',e=>{
+  const tn=(e.target&&e.target.tagName||'').toLowerCase();if(tn==='input'||tn==='textarea')return;
+  const k=e.key.toLowerCase();
   if(e.key===' '){if(running)releaseAction();}
   keys[k]=false;});
 canvas.addEventListener('mousedown',e=>{if(!running)return;if(noTouch&&document.pointerLockElement!==canvas){canvas.requestPointerLock();return;}if(e.button===0)beginAction();});
@@ -2368,7 +2410,7 @@ function updateHUD(){const need=game.level*120;
 let toastTimer;function showToast(t,c){const el=document.getElementById('toast');el.innerHTML='<span style="color:'+(c||'#fff')+'">'+t+'</span>';el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),1300);}
 
 /* ============ PANELS ============ */
-function hidePanels(){['welcome','charSelect','logPanel','resultPanel','invPanel','controlsPanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));}
+function hidePanels(){['welcome','charSelect','logPanel','resultPanel','invPanel','controlsPanel','lorePanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));}
 function showControls(){hidePanels();document.getElementById('hud').classList.add('hidden');
   const rows=[
     ['Move','W A S D  /  Arrow keys','On touch: the left joystick'],
@@ -2389,23 +2431,170 @@ function showControls(){hidePanels();document.getElementById('hud').classList.ad
   ).join('');
   document.getElementById('controlsPanel').classList.remove('hidden');}
 function showCharSelect(){hidePanels();document.getElementById('hud').classList.add('hidden');document.getElementById('charSelect').classList.remove('hidden');drawSkinPreview();}
+/* ===== LORE: Corvane the crow tells the tale (first run + replayable) ===== */
+const LORE_PAGES=[
+  "Caw. A new recruit, then. I'm Corvane — I've watched this border a long, long time. Listen close.",
+  "Beyond those trees is the Reach. Past it, the demons. For a thousand years they've tried to take the kingdom. For a thousand years, the knights have stopped them.",
+  "Here's their secret: the demons out there can't be beaten by a sword alone. They feed on the demons inside you. Doubt. Laziness. Fear.",
+  "So every knight swears Eight Vows — eight small habits they keep every day. Master yourself first, and the demons outside lose their grip.",
+  "Why eight? Tradition. The first knights swore eight, and every knight since has done the same. Keep your vows and you march strong. Break them and you march weak.",
+  "Now it's your turn. Pick eight habits you've always struggled to keep. The harder they are, the deeper you can go — and the better the loot you bring home.",
+  "Your Eight are locked in until you defeat all three Demon Lords in the deep tiers. Beat them, finish your trial, and you're free to change your vows however you like.",
+  "That's enough talk. Go speak your vows in the War-Log, then march. The Reach is waiting. Caw."
+];
+let lorePage=0;
+function showLore(){lorePage=0;hidePanels();document.getElementById('hud').classList.add('hidden');document.getElementById('lorePanel').classList.remove('hidden');renderLorePage();}
+function renderLorePage(){
+  document.getElementById('loreText').textContent=LORE_PAGES[lorePage];
+  document.getElementById('loreDots').textContent=LORE_PAGES.map((_,i)=>i===lorePage?'●':'○').join(' ');
+  document.getElementById('loreNextBtn').textContent=(lorePage>=LORE_PAGES.length-1)?'Speak your Vows ▸':'Next ▸';
+}
+function loreNext(){if(lorePage<LORE_PAGES.length-1){lorePage++;renderLorePage();}else{game.loreSeen=true;saveGame();showLog();}}
+function loreSkip(){game.loreSeen=true;saveGame();showWelcome();}
+function drawCrow(){const cv=document.getElementById('crowCanvas');if(!cv)return;const x=cv.getContext('2d');x.imageSmoothingEnabled=false;x.clearRect(0,0,380,400);
+  const t=Date.now()/1000;
+  const bob=Math.round(Math.sin(t*1.8)*2);
+  const talk=Math.sin(t*7)>0.3;const beakDrop=talk?4:0;
+  const blink=(Math.sin(t*0.9+1)>0.94);
+  const plumeWave=Math.sin(t*2.2)*4;
+  const p=10;
+  // palette
+  const FE='#15161d', FED='#0c0d12', FEL='#23252f', SHEEN='#39414f';
+  const STEEL='#c4ccd4', STEELL='#e6ebef', STEELD='#8a929c', STEELDD='#5f666e';
+  const PLUME='#c0392b', PLUMED='#8e2820', PLUMEL='#e05545';
+  // ===== FULL BODY: crow faces RIGHT (toward the panel), perched =====
+  const cx=170, cy=200+bob;
+  x.save();x.translate(cx,cy);
+
+  // ---- LEGS + FEET (thin, beneath the body) ----
+  x.fillStyle=FED;
+  x.fillRect(-1*p,9*p,0.7*p,3.2*p);x.fillRect(2*p,9*p,0.7*p,3.2*p);          // two legs
+  // toes
+  for(const lx of [-1,2]){x.fillRect((lx-0.6)*p,12*p,2.2*p,0.6*p);x.fillRect((lx+0.2)*p,12*p,0.6*p,1*p);}
+
+  // ---- TAIL (sweeps back-LEFT behind body) ----
+  x.fillStyle=FED;x.fillRect(-8*p,4*p,5*p,2.4*p);x.fillRect(-10*p,5*p,3*p,2*p);
+  x.fillStyle=FE;x.fillRect(-7.6*p,3.6*p,4.5*p,2*p);
+  x.fillStyle=FEL;x.fillRect(-7.6*p,3.6*p,4.5*p,0.5*p);    // tail top edge light
+
+  // ---- BODY (plump, upright oval-ish block) ----
+  x.fillStyle=FE;
+  x.fillRect(-5*p,-3*p,9*p,11*p);            // main body
+  x.fillRect(-4*p,-4*p,7*p,1*p);             // shoulders
+  x.fillRect(-6*p,-1*p,1*p,7*p);             // left belly
+  x.fillRect(4*p,-1*p,1*p,7*p);              // right breast
+  // breast sheen (toward the panel, right side lit)
+  x.fillStyle=FEL;x.fillRect(2*p,-2*p,2.5*p,7*p);
+  x.fillStyle=SHEEN;x.fillRect(2.4*p,-1*p,1.4*p,3*p);
+  // belly shadow (left)
+  x.fillStyle=FED;x.fillRect(-5*p,3*p,4*p,5*p);
+
+  // ---- FOLDED WING (layered primaries over the left/back of body) ----
+  x.fillStyle=FED;x.fillRect(-5.5*p,-2*p,6*p,8*p);
+  x.fillStyle=FE;x.fillRect(-5*p,-2*p,5*p,7*p);
+  // feather layering lines
+  x.fillStyle=FED;for(let i=0;i<4;i++){x.fillRect(-5*p,(-1+i*1.6)*p,4.5*p-i*0.3*p,0.5*p);}
+  // wing covert sheen
+  x.fillStyle=SHEEN;x.fillRect(-4*p,-1.4*p,1.6*p,2*p);
+  // wingtip pointing back
+  x.fillStyle=FED;x.fillRect(-6*p,4*p,2*p,2.4*p);
+
+  // ===== HEAD (up and to the right) =====
+  x.save();x.translate(2.5*p,-7*p);   // head sits atop the breast, toward the panel
+
+  // ---- RED PLUME (behind helmet, rises and sweeps up then back-LEFT, away from the beak) ----
+  const plumeSteps=[[-0.6,-5.4,2,1.9],[-1.6,-6.8,2.2,2.1],[-2.8,-7.8,2.3,2.3],[-4.1,-8.1,2.3,2.4],[-5.3,-7.7,2.2,2.5],[-6.3,-6.5,2,2.6],[-6.8,-4.8,1.9,2.5],[-6.9,-3.2,1.8,2.4]];
+  plumeSteps.forEach((s,i)=>{const wav=plumeWave*(i/plumeSteps.length);
+    x.fillStyle=PLUMED;x.fillRect(s[0]*p-wav,s[1]*p,s[2]*p,s[3]*p);
+    x.fillStyle=PLUME;x.fillRect(s[0]*p-wav+s[2]*p*0.32,s[1]*p,s[2]*p*0.68,s[3]*p);
+    x.fillStyle=PLUMEL;x.fillRect(s[0]*p-wav+s[2]*p*0.7,s[1]*p,s[2]*p*0.3,s[3]*p*0.6);});
+
+  // ---- CROW HEAD (black) ----
+  x.fillStyle=FE;
+  x.fillRect(-2.5*p,-2.5*p,6*p,6*p);         // head block
+  x.fillRect(3.5*p,-0.5*p,1.5*p,3*p);        // face toward beak (right)
+  x.fillStyle=FED;x.fillRect(-2.5*p,-2.5*p,1.5*p,6*p);   // back-of-head shadow (left)
+  x.fillStyle=FEL;x.fillRect(0*p,-2.5*p,3.5*p,0.8*p);    // lit top under brim
+
+  // ---- BEAK (black, pointing RIGHT toward panel) ----
+  x.fillStyle=FED;
+  x.fillRect(5*p,-0.4*p,1.8*p,1.8*p);
+  x.fillRect(6.6*p,0.1*p,1.5*p,1.3*p);
+  x.fillRect(8*p,0.5*p,1.2*p,0.9*p);
+  x.fillStyle='#1c1d24';x.fillRect(5*p,1.4*p+beakDrop*0.05,1.8*p,0.9*p);x.fillRect(6.6*p,1.4*p+beakDrop*0.05,1.3*p,0.7*p);  // lower mandible
+  x.fillStyle=FEL;x.fillRect(5*p,-0.4*p,3*p,0.4*p);      // beak top light
+
+  // ---- EYE (white ring, dark center — like the reference) ----
+  if(!blink){
+    x.fillStyle='#f4f1e8';x.fillRect(1.4*p,-1.2*p,2.6*p,2.6*p);     // white ring
+    x.fillStyle=FED;x.fillRect(2*p,-0.6*p,1.4*p,1.4*p);            // dark center
+    x.fillStyle='#fff';x.fillRect(2.2*p,-0.4*p,0.5*p,0.5*p);       // glint
+  } else {x.fillStyle=FED;x.fillRect(1.4*p,0*p,2.6*p,0.6*p);}
+
+  // ---- KNIGHT HELMET (steel dome + raised visor with slits) ----
+  x.fillStyle=STEEL;
+  x.fillRect(-2.8*p,-4.6*p,6.4*p,2.4*p);      // band over skull
+  x.fillRect(-2*p,-5.8*p,5*p,1.4*p);          // dome
+  x.fillRect(-1*p,-6.6*p,3.2*p,1*p);          // crown
+  x.fillStyle=STEELL;x.fillRect(-2*p,-5.8*p,5*p,0.5*p);x.fillRect(-1*p,-6.6*p,3.2*p,0.5*p);   // top highlight
+  x.fillStyle=STEELD;x.fillRect(2.2*p,-4.6*p,1.4*p,2.4*p);     // right shadow
+  x.fillStyle=STEELDD;x.fillRect(-2.8*p,-2.5*p,6.4*p,0.5*p);   // brim shadow
+  // raised visor jutting forward-right over the brow, with slits
+  x.fillStyle=STEELD;x.fillRect(3*p,-4.4*p,2.4*p,1.8*p);       // visor underside
+  x.fillStyle=STEEL;x.fillRect(3.2*p,-5*p,2.8*p,1.3*p);        // visor top
+  x.fillStyle=STEELL;x.fillRect(3.2*p,-5*p,2.8*p,0.5*p);
+  x.fillStyle=FED;x.fillRect(3.7*p,-4.3*p,0.5*p,1.3*p);x.fillRect(4.5*p,-4.3*p,0.5*p,1.3*p);   // slits
+  // rivets
+  x.fillStyle=STEELDD;x.fillRect(-1.8*p,-3.6*p,0.6*p,0.6*p);x.fillRect(2.2*p,-3.6*p,0.6*p,0.6*p);
+  // plume socket
+  x.fillStyle=STEELDD;x.fillRect(-2.2*p,-5.4*p,1.6*p,1.4*p);
+
+  x.restore();
+  x.restore();
+}
+function loreTick(){const lp=document.getElementById('lorePanel');if(lp&&!lp.classList.contains('hidden'))drawCrow();requestAnimationFrame(loreTick);}
+loreTick();
+
 function showWelcome(){hidePanels();document.getElementById('hud').classList.add('hidden');
   document.getElementById('welLevel').textContent='Lv '+game.level;document.getElementById('welStreak').textContent=streakCount()+' days';document.getElementById('welLoot').textContent=game.loot.length;
   document.getElementById('welHint').innerHTML=noTouch?'<kbd>WASD</kbd> move · <kbd>mouse</kbd> look · <kbd>F</kbd> switch weapon (melee/bow/throw) · hold click to wind up, release to strike/fire/throw · <kbd>C</kbd> dodge':'left stick move · drag to look · 🔄 switch weapon · hold ⚔ to wind up, release to act · 💨 dodge';
   document.getElementById('welcome').classList.remove('hidden');}
 /* war-log */
 function showLog(){ensureTracker();hidePanels();document.getElementById('hud').classList.add('hidden');const d=new Date();document.getElementById('logDate').textContent=d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});renderLog();document.getElementById('logPanel').classList.remove('hidden');}
-function renderLog(){const list=document.getElementById('logList');const empty=document.getElementById('emptyNote');list.innerHTML='';const cats=logCats();const any=cats.some(c=>c.items.length);empty.style.display=any?'none':'block';if(!any)empty.innerHTML='No vows yet. Add some below — they\'ll sync to your Daily Tracker too.';
+function renderLog(){ensureTracker();const list=document.getElementById('logList');list.innerHTML='';
+  document.getElementById('emptyNote').style.display='none';
   if(!tracker.checks[todayKey()])tracker.checks[todayKey()]={};
-  cats.forEach(cat=>{if(!cat.items.length&&cat.key!=='custom')return;const h=document.createElement('div');h.className='log-cat';h.innerHTML='<span>'+cat.name+'</span>';list.appendChild(h);
-    cat.items.forEach(it=>{const row=document.createElement('div');row.className='log-item'+(it.type==='avoid'?' avoid':'')+(it.done?' done':'');
-      const tick=document.createElement('button');tick.className='tick'+(it.done?' on':'');tick.onclick=()=>{const k=todayKey();if(!tracker.checks[k])tracker.checks[k]={};tracker.checks[k][cat.key+':'+it.idx]=!tracker.checks[k][cat.key+':'+it.idx];recomputeStreak();saveTracker();renderLog();updateMeter();};
-      const lab=document.createElement('input');lab.className='li-label';lab.value=it.label;lab.maxLength=48;lab.onchange=()=>{tracker.items[cat.key][it.idx].label=lab.value;saveTracker();};
-      const typ=document.createElement('button');typ.className='li-type';typ.textContent=it.type==='avoid'?'avoid':'do';typ.onclick=()=>{tracker.items[cat.key][it.idx].type=it.type==='avoid'?'do':'avoid';recomputeStreak();saveTracker();renderLog();updateMeter();};
-      const del=document.createElement('button');del.className='li-del';del.textContent='×';del.onclick=()=>{tracker.items[cat.key].splice(it.idx,1);const k=todayKey(),old=tracker.checks[k]||{},nc={};Object.keys(old).forEach(key=>{const[c,n]=key.split(':');if(c!==cat.key){nc[key]=old[key];return;}const ni=+n;if(ni<it.idx)nc[key]=old[key];else if(ni>it.idx)nc[cat.key+':'+(ni-1)]=old[key];});tracker.checks[k]=nc;recomputeStreak();saveTracker();renderLog();updateMeter();};
-      row.append(tick,lab,typ,del);list.appendChild(row);});});
+  const vows=tracker.items.custom;const locked=vowsLocked();
+  cat_render(list,vows,locked);
+  // counter + hint + add-row visibility
+  const filled=vows.filter(v=>(v.label||'').trim()).length;
+  const vc=document.getElementById('vowCount');
+  if(locked){vc.innerHTML='⚜ The Eight Vows &nbsp;·&nbsp; <span style="color:#d8cfa8">'+filled+' of 8 spoken</span>';}
+  else{vc.innerHTML='⚜ Vows &nbsp;·&nbsp; <span style="color:#d8cfa8">'+vows.length+' kept</span> &nbsp;<span class="tiny" style="color:#7a9a5a">(the Eight are loosed — keep as many as you will)</span>';}
+  const addRow=document.getElementById('addRow');
+  addRow.style.display=(locked&&vows.length>=8)?'none':'flex';
+  const hint=document.getElementById('logHint');
+  if(locked)hint.innerHTML='Tap a vow to name it, ✓ when kept, the tag to swap <b>uphold/forswear</b>. The Eight are bound — you cannot add or remove them until every Demon Lord has fallen. Tick what you honor each day; your discipline sets the hunt\'s peril.';
+  else hint.innerHTML='The trial is won — the Eight are loosed. Add, remove, and reshape your vows freely. Completion still sets the hunt\'s peril and spoils.';
   updateMeter();}
-function addGoal(type){ensureTracker();const inp=document.getElementById('newGoalInput');const label=inp.value.trim();if(!label)return;if(!tracker.items.custom)tracker.items.custom=[];tracker.items.custom.push({label,target:'',value:'',type});inp.value='';saveTracker();renderLog();}
+function cat_render(list,vows,locked){
+  vows.forEach((it,idx)=>{const k=todayKey();const checks=tracker.checks[k]||{};const done=!!checks['custom:'+idx];
+    const row=document.createElement('div');row.className='log-item'+(it.type==='avoid'?' avoid':'')+(done?' done':'');
+    const tick=document.createElement('button');tick.className='tick'+(done?' on':'');
+    tick.onclick=()=>{if(!tracker.checks[k])tracker.checks[k]={};tracker.checks[k]['custom:'+idx]=!tracker.checks[k]['custom:'+idx];recomputeStreak();saveTracker();renderLog();};
+    const lab=document.createElement('input');lab.className='li-label';lab.value=it.label||'';lab.maxLength=48;lab.placeholder=locked?('Vow '+(idx+1)+' — name a discipline to uphold…'):'Name a vow…';
+    lab.onchange=()=>{tracker.items.custom[idx].label=lab.value;saveTracker();renderLog();};
+    const typ=document.createElement('button');typ.className='li-type';typ.textContent=it.type==='avoid'?'forswear':'uphold';
+    typ.onclick=()=>{tracker.items.custom[idx].type=it.type==='avoid'?'do':'avoid';recomputeStreak();saveTracker();renderLog();};
+    row.append(tick,lab,typ);
+    // delete only when unlocked (after all bosses fall)
+    if(!locked){const del=document.createElement('button');del.className='li-del';del.textContent='×';
+      del.onclick=()=>{tracker.items.custom.splice(idx,1);const old=tracker.checks[k]||{},nc={};Object.keys(old).forEach(key=>{const[c,n]=key.split(':');if(c!=='custom'){nc[key]=old[key];return;}const ni=+n;if(ni<idx)nc[key]=old[key];else if(ni>idx)nc['custom:'+(ni-1)]=old[key];});tracker.checks[k]=nc;recomputeStreak();saveTracker();renderLog();};
+      row.append(del);}
+    list.appendChild(row);});}
+function addGoal(type){ensureTracker();const inp=document.getElementById('newGoalInput');const label=inp.value.trim();if(!label)return;
+  if(vowsLocked()&&tracker.items.custom.length>=8){showToast('The Eight are bound — defeat every Demon Lord to loose them','#c1543a');return;}
+  tracker.items.custom.push({label,target:'',value:'',type});inp.value='';saveTracker();renderLog();}
 function updateMeter(){const sc=logScore();const md=game.marchDays||0;const streak=streakCount()+md;const t=tierFor(sc.pct,streak);document.getElementById('meterPct').textContent=Math.round(sc.pct*100)+'%';document.getElementById('meterFill').style.width=(sc.pct*100)+'%';const tr=document.getElementById('tierReadout');if(sc.total===0)tr.innerHTML='Add vows to set difficulty — practice hunt is <b>Sunlit Clearing</b>';else{let band='';if(sc.pct>=1)band='100% → The Umbral Deep floor';else if(sc.pct>=0.84)band='84%+ → The Cinereal Waste';else if(sc.pct>=0.70)band='70%+ → Blighted Tundra';else if(sc.pct>=0.50)band='50%+ → Deep Thicket';else if(sc.pct>=0.25)band='25%+ → Forest Edge';else band='Sunlit Clearing';let extra='<br><span class="tiny" style="color:var(--gold)">🗡 Each March advances a day — '+md+' marched · deeper tiers await</span>';tr.innerHTML='Difficulty: <b style="color:'+t.col+'">'+t.name+'</b><br><span class="tiny">'+sc.done+' of '+sc.total+' vows · '+band+' · richer loot deeper in</span>'+extra;}}
 
 /* inventory */
@@ -2664,6 +2853,7 @@ function drawDoll(){const cv=document.getElementById('dollCanvas'),x=cv.getConte
 document.getElementById('toLogBtn').onclick=showLog;
 document.getElementById('welInvBtn').onclick=showInv;
 document.getElementById('welControlsBtn').onclick=showControls;
+document.getElementById('welLoreBtn').onclick=showLore;
 document.getElementById('controlsBackBtn').onclick=showWelcome;
 document.getElementById('backWelBtn').onclick=showWelcome;
 document.getElementById('marchBtn').onclick=startQuest;
@@ -2676,7 +2866,9 @@ document.getElementById('rotL').onclick=()=>cycleEquippedSkin(-1);
 document.getElementById('rotR').onclick=()=>cycleEquippedSkin(1);
 document.getElementById('skinPrev').onclick=()=>browseSkin(-1);
 document.getElementById('skinNext').onclick=()=>browseSkin(1);
-document.getElementById('beginBtn').onclick=()=>{const sk=SKINS[skinBrowse];if(!skinUnlocked(sk))return;game.skin=sk.id;saveGame();showWelcome();};
+document.getElementById('beginBtn').onclick=()=>{const sk=SKINS[skinBrowse];if(!skinUnlocked(sk))return;game.skin=sk.id;saveGame();if(!game.loreSeen)showLore();else showWelcome();};
+document.getElementById('loreNextBtn').onclick=loreNext;
+document.getElementById('loreSkipBtn').onclick=loreSkip;
 document.getElementById('tabGear').onclick=()=>setInvTab('gear');
 document.getElementById('tabForge').onclick=()=>setInvTab('forge');
 document.getElementById('tabStats').onclick=()=>setInvTab('stats');
