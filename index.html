@@ -194,7 +194,24 @@
       <button id="toLogBtn">Open the War-Log</button>
       <button class="alt" id="welInvBtn">Inventory</button>
     </div>
+    <div class="btn-row" style="margin-top:0.5rem;">
+      <button class="alt" id="welControlsBtn">Controls &amp; Help</button>
+    </div>
     <div class="tiny" id="welHint"></div>
+  </div>
+</div>
+
+<div class="panel scrim hidden" id="controlsPanel">
+  <div class="card" style="max-width:560px;width:100%;text-align:left;">
+    <div class="crest">Field Manual</div>
+    <h1 style="margin-bottom:0.4rem;">Controls &amp; Help</h1>
+    <div style="background:rgba(224,177,60,0.12);border:1px solid var(--gold);border-radius:8px;padding:0.7rem 0.9rem;margin:0.6rem 0 1rem;">
+      <b style="color:var(--gold);">Starting a hunt:</b> <span class="tiny" style="color:#d8cfa8;">When you enter the Reach, <b>click the screen once</b> to lock the mouse and take control — then move the mouse to look around. Press <b>Esc</b> to release the mouse when you're done.</span>
+    </div>
+    <div id="controlsList"></div>
+    <div class="btn-row" style="margin-top:1rem;">
+      <button id="controlsBackBtn">Back to Camp</button>
+    </div>
   </div>
 </div>
 
@@ -1391,7 +1408,7 @@ function renderHand(){
   const charge=attackHeld?Math.min(1,attackHeldFrames/CHARGE_MAX):0;
 
   if(weaponMode==='ranged'&&game.equip.ranged){
-    const rw=lootById(game.equip.ranged);const rc=RC[rw.rarity];
+    const rw=lootById(game.equip.ranged);if(!rw){game.equip.ranged=null;return;}const rc=RC[rw.rarity];
     const draw=attackHeld?charge:(player.bowAnim>0?player.bowAnim/10:0);
     const wood='#6b4a2b', woodD='#4d3420', woodL='#8a6238', horn=rc, hornL=shade(rc,1.3), str='#e9e2cc', shaft='#d7ccae';
     // ---- legendary/mythic aura behind the ranged weapon ----
@@ -1593,6 +1610,79 @@ function renderHand(){
     return;
   }
 
+  // ----- DUAL DAGGERS: two independent hands at the lower corners, striking in quick succession -----
+  if(weaponMode==='melee'&&game.equip.weapon&&lootById(game.equip.weapon)&&lootById(game.equip.weapon).form==='knives'){
+    const eqk=lootById(game.equip.weapon);
+    const col=RC[eqk.rarity],colL=shade(col,1.35),colD=shade(col,0.6);
+    const steel='#c9d2da',steelD='#7d8893';
+    const skL=shade(skinTone,1.14),skD=shade(skinTone,0.78);
+    // mythic/legendary aura
+    if(eqk.rarity==='legendary'||eqk.rarity==='mythic'){const pulse=0.5+0.5*Math.sin(frame*0.12);
+      for(const gx of [W*0.26,W*0.74]){const gr=ctx.createRadialGradient(gx,H*0.72,0,gx,H*0.72,W*0.18);gr.addColorStop(0,col);gr.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.save();ctx.globalAlpha=(eqk.rarity==='mythic'?0.26:0.18)*(0.7+0.3*pulse);ctx.globalCompositeOperation='lighter';ctx.fillStyle=gr;ctx.beginPath();ctx.arc(gx,H*0.72,W*0.18,0,Math.PI*2);ctx.fill();ctx.restore();}}
+    // strike phase: swing runs PI→0 (phase 1→0 as it decays). Lead hand peaks FIRST (early, high phase),
+    // off-hand peaks a beat later (lower phase) → a quick one-two.
+    const phase=Math.max(0,Math.min(1,swing/Math.PI));
+    const chargeRaise=charge*H*0.05;
+    for(const s of [-1,1]){           // s=-1 left hand, s=+1 right hand
+      const leads=(s===slashDir);
+      // lead hand: jab maps to the FIRST half of the swing (phase 1→0.4). off-hand: SECOND half (phase 0.6→0).
+      const local = leads ? (1-phase)/0.6 : (0.6-phase)/0.6;
+      const jab=Math.sin(Math.min(1,Math.max(0,local))*Math.PI);   // 0→1→0 thrust
+      // hand anchored to its corner; jab pushes it UP and slightly toward center
+      const baseHX=W*(0.5+s*0.265), baseHY=H*0.92;
+      const hx=baseHX - s*jab*W*0.045;
+      const hy=baseHY - jab*H*0.16 - chargeRaise + bob*0.5 + switchDip;
+      const tilt=-s*0.85 + s*jab*0.30;   // blade tips lean toward CENTER; straighten a touch as they jab
+      // ---- FOREARM: a wide rect from the hand straight DOWN past the screen edge (always connected) ----
+      ctx.save();ctx.translate(hx,hy);ctx.rotate(-s*0.12 + s*jab*0.06);
+      ctx.fillStyle=skinTone;ctx.fillRect(-W*0.05,0,W*0.10,H*0.34);
+      ctx.fillStyle=skL;ctx.fillRect(-W*0.05,0,W*0.03,H*0.34);
+      ctx.fillStyle=skD;ctx.fillRect(W*0.02,0,W*0.03,H*0.34);
+      // gloved wrist cuff
+      ctx.fillStyle=shade('#4a3a28',1);ctx.fillRect(-W*0.052,H*0.08,W*0.104,H*0.05);
+      ctx.restore();
+      // ---- FIST + DAGGER (rotated to point up-inward) ----
+      ctx.save();ctx.translate(hx,hy);ctx.rotate(tilt);
+      // fist: a blocky gripping hand seen from the back, with defined finger segments
+      const fw=W*0.05, fh=H*0.085;
+      ctx.fillStyle=skinTone;ctx.fillRect(-fw,-fh*0.5,fw*2,fh);            // palm/back of hand block
+      ctx.fillStyle=skL;ctx.fillRect(-fw,-fh*0.5,fw*2,fh*0.16);            // lit top ridge
+      ctx.fillStyle=skD;                                                   // shadow gaps between fingers
+      for(let f=1;f<4;f++)ctx.fillRect(-fw+f*(fw*2/4)-W*0.003,-fh*0.5,W*0.006,fh*0.78);
+      // curled fingertips along the bottom edge
+      ctx.fillStyle=shade(skinTone,0.9);
+      for(let f=0;f<4;f++)ctx.fillRect(-fw+f*(fw*2/4)+W*0.002,fh*0.28,fw*2/4-W*0.004,fh*0.22);
+      // thumb wrapping across the front (toward center)
+      ctx.fillStyle=skinTone;ctx.fillRect(s<0?fw-W*0.01:-fw-W*0.01,-fh*0.1,W*0.02,fh*0.55);
+      ctx.fillStyle=skD;ctx.fillRect(s<0?fw-W*0.01:-fw-W*0.01,-fh*0.1,W*0.006,fh*0.55);
+      // crossguard sits just above the fist
+      ctx.fillStyle=steel;ctx.fillRect(-W*0.032,-fh*0.5-H*0.014,W*0.064,H*0.016);
+      ctx.fillStyle=steelD;ctx.fillRect(-W*0.032,-fh*0.5-H*0.002,W*0.064,H*0.004);
+      // motion streak while thrusting
+      if(jab>0.5){ctx.save();ctx.globalAlpha=(jab-0.5)*0.8;ctx.strokeStyle=colL;ctx.lineWidth=W*0.016;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,-H*0.12);ctx.lineTo(0,-H*0.34);ctx.stroke();ctx.restore();}
+      // ---- SHARP angular dagger blade: straight tapering edges to a fine point ----
+      const bw=W*0.026, bl=H*0.23, gy=-fh*0.5-H*0.012, tipY=gy-bl, shoulderY=gy-bl*0.16;
+      // dark base (full silhouette) — straight lines, hard point
+      ctx.fillStyle=colD;ctx.beginPath();
+      ctx.moveTo(0,gy);                       // ricasso at guard
+      ctx.lineTo(-bw,shoulderY);              // out to the widest point (shoulder)
+      ctx.lineTo(0,tipY);                     // straight edge up to the sharp tip
+      ctx.lineTo(bw,shoulderY);               // straight edge down the other side
+      ctx.closePath();ctx.fill();
+      // lit bevel on the right half — a hard diagonal facet
+      ctx.fillStyle=col;ctx.beginPath();
+      ctx.moveTo(0,gy);ctx.lineTo(0,tipY);ctx.lineTo(bw,shoulderY);ctx.closePath();ctx.fill();
+      // bright central spine/fuller (thin straight highlight)
+      ctx.fillStyle=colL;ctx.beginPath();
+      ctx.moveTo(0,gy-bl*0.04);ctx.lineTo(W*0.004,shoulderY);ctx.lineTo(0,tipY);ctx.lineTo(-W*0.004,shoulderY);ctx.closePath();ctx.fill();
+      // glint near the tip
+      ctx.fillStyle='#ffffff';ctx.globalAlpha=0.7;ctx.fillRect(-W*0.002,tipY+bl*0.1,W*0.004,bl*0.18);ctx.globalAlpha=1;
+      ctx.restore();
+    }
+    return;
+  }
+
   // ----- MELEE (default) -----
   const eq=game.equip.weapon?lootById(game.equip.weapon):null;
   const mform=eq?eq.form:'sword';
@@ -1601,10 +1691,10 @@ function renderHand(){
   // per-form swing flavor: thrust (spear/longspear), chop (mace), quick slash (knives), sweep (windstaff)
   const isThrust=(mform==='spear'||mform==='longspear');
   const isKnives=(mform==='knives');
-  const liftMag=mform==='flail'?0.30:(isKnives?0.0:(isThrust?0.06:0.18));
+  const liftMag=mform==='flail'?0.30:(isKnives?0.14:(isThrust?0.06:0.18));
   const thrust=isThrust?Math.sin(swing)*H*0.16:0;        // forward lunge for thrust weapons
   const swingLift=Math.abs(Math.sin(swing))*H*liftMag, chargeLift=windup*H*0.10;
-  const sideTravel=isKnives?0:(Math.sin(swing)*slashDir*W*0.07*(isThrust?0.3:1) - windup*W*0.05);   // pull back-right during windup
+  const sideTravel=Math.sin(swing)*slashDir*W*0.07*(isThrust?0.3:1) - windup*W*0.05;   // pull back-right during windup
   let baseY=H-H*0.06-swingLift-chargeLift+bob+switchDip+thrust;
   let x=W*0.58+sideTravel, w=W*0.27, h=H*0.92;          // longer reach, original width
   if(player.dodgeT>0)baseY+=H*0.08;
@@ -1612,9 +1702,9 @@ function renderHand(){
   const colL=shade(col,1.35), colD=shade(col,0.6);
   const woodG='#6b4a2b', woodGD='#4a3320', woodGL='#8a6238', leather=skinTone, steel='#c9d2da', steelD='#7d8893';
   // rotate the whole weapon: cock back (+) during wind-up, snap forward (−) during the swing
-  const swingMag=mform==='flail'?0.35:(isKnives?0:(mform==='windstaff'?1.15:(isThrust?0.18:0.7)));
+  const swingMag=mform==='flail'?0.35:(isKnives?0.5:(mform==='windstaff'?1.15:(isThrust?0.18:0.7)));
   const swingRot = -Math.sin(swing)*slashDir*swingMag;  // swing arc (form-specific amplitude)
-  const windRot  = isKnives?0:(windup*0.5);             // cocked-back tilt (knives handle their own)
+  const windRot  = windup*0.5;                          // cocked-back tilt
   ctx.save();
   ctx.translate(x+w*0.47, baseY);
   ctx.rotate(windRot+swingRot);
@@ -1756,54 +1846,6 @@ function renderHand(){
     ctx.fillStyle=steelD;ctx.fillRect(cxw-w*0.11,sy+h*0.05,w*0.22,h*0.03);
     ctx.fillStyle=steel;ctx.fillRect(cxw-w*0.11,sy+h*0.05,w*0.22,h*0.012);
   }
-  else if(eq&&eq.form==='knives'){
-    // ===== DUAL SHADOW DAGGERS — a hand at each bottom corner, stabbing forward & back in quick alternation =====
-    // swing runs ~PI→0 after an attack. Convert to a 0..1 strike phase; the two hands are OUT OF PHASE
-    // so they jab one-two in quick succession.
-    const phase=swing/Math.PI;                          // 1 just after striking → 0 at rest
-    for(const s of [-1,1]){
-      // left hand leads on one strike, right on the next (slashDir flips each attack)
-      const leads = (s===slashDir);
-      // each hand's stab: a sharp out-and-back. Lead hand peaks early, off-hand peaks slightly later.
-      const local = leads ? phase : Math.max(0, phase-0.35);   // off-hand delayed → one-two
-      const stab = Math.sin(Math.min(1,local*1.6)*Math.PI);    // 0→1→0 punch curve
-      const baseX = W*0.5 + s*W*0.30;                   // hand rooted near each bottom corner
-      const handBaseY = H*1.02;                          // just below the screen edge
-      // stab drives the hand UP toward the crosshair and slightly inward, then back
-      const hxk = baseX - s*stab*W*0.10;
-      const hyk = handBaseY - stab*H*0.42 - bob*0.5 + switchDip;
-      const ang = s*0.35 - s*stab*0.25;                  // angle in toward center, straightening as it thrusts
-      ctx.save();ctx.translate(hxk,hyk);ctx.rotate(ang);
-      const bw=W*0.05, bl=H*0.34;                        // blade half-width, length
-      // ---- forearm coming up from the corner ----
-      ctx.fillStyle=skinTone;ctx.fillRect(-W*0.045,H*0.04,W*0.09,H*0.30);
-      ctx.fillStyle=shade(skinTone,1.12);ctx.fillRect(-W*0.045,H*0.04,W*0.03,H*0.30);
-      ctx.fillStyle=shade(skinTone,0.82);ctx.fillRect(W*0.015,H*0.04,W*0.03,H*0.30);
-      // ---- fist ----
-      ctx.fillStyle=shade(skinTone,0.95);ctx.beginPath();ctx.ellipse(0,H*0.03,W*0.05,H*0.045,0,0,Math.PI*2);ctx.fill();
-      // ---- open knuckle-guard ring ----
-      ctx.strokeStyle=steelD;ctx.lineWidth=Math.max(3,W*0.012);ctx.lineCap='round';
-      ctx.beginPath();ctx.arc(0,H*0.0,W*0.045,-0.5,Math.PI+0.5);ctx.stroke();
-      ctx.strokeStyle=steel;ctx.lineWidth=Math.max(1.5,W*0.005);
-      ctx.beginPath();ctx.arc(0,H*0.0,W*0.045,-0.5,Math.PI+0.5);ctx.stroke();
-      ctx.fillStyle=steelD;ctx.fillRect(-bw*0.5,-H*0.01,bw,H*0.022);    // guard nub
-      // ---- broad leaf blade (points UP toward the enemy) ----
-      const tip=-bl;
-      ctx.fillStyle=colD;ctx.beginPath();
-      ctx.moveTo(0,0);
-      ctx.quadraticCurveTo(-bw,-bl*0.42,-bw*0.5,-bl*0.78);
-      ctx.quadraticCurveTo(-bw*0.2,tip+bl*0.06,0,tip);
-      ctx.quadraticCurveTo(bw*0.2,tip+bl*0.06,bw*0.5,-bl*0.78);
-      ctx.quadraticCurveTo(bw,-bl*0.42,0,0);
-      ctx.closePath();ctx.fill();
-      ctx.fillStyle=col;ctx.beginPath();
-      ctx.moveTo(0,-bl*0.02);ctx.quadraticCurveTo(bw*0.7,-bl*0.42,bw*0.4,-bl*0.76);ctx.quadraticCurveTo(bw*0.15,tip+bl*0.06,0,tip);ctx.closePath();ctx.fill();
-      ctx.fillStyle=colL;ctx.beginPath();ctx.moveTo(0,-bl*0.1);ctx.lineTo(bw*0.06,-bl*0.4);ctx.lineTo(0,tip+bl*0.08);ctx.lineTo(-bw*0.06,-bl*0.4);ctx.closePath();ctx.fill();
-      // motion streak when thrusting hard
-      if(stab>0.5){ctx.globalAlpha=(stab-0.5)*0.8;ctx.strokeStyle=colL;ctx.lineWidth=Math.max(1,W*0.004);ctx.beginPath();ctx.moveTo(0,tip);ctx.lineTo(0,tip+H*0.1);ctx.stroke();ctx.globalAlpha=1;}
-      ctx.restore();
-    }
-  }
   else if(eq&&eq.form==='windstaff'){
     // tall staff with a swirling air crystal at the top; faint orbiting wind motes
     ctx.fillStyle=woodG;ctx.fillRect(cxw-w*0.035,baseY-h*0.72,w*0.07,h*0.88);
@@ -1870,7 +1912,7 @@ function particleBurst(wx,wy,n,col,spd,life){
   for(let i=0;i<n;i++){const a=Math.random()*6.28,sp=spd*(0.4+Math.random());particles.push({x:wx,y:wy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:life*(0.6+Math.random()*0.6),max:life,col,h:0.2+Math.random()*0.4});}}
 function addFloater(wx,wy,text,col,big){if(floaters.length>=MAX_FLOATERS)floaters.shift();floaters.push({x:wx,y:wy,text,col,life:50,vy:-0.6,big:!!big});}
 
-function dealDamage(e,raw,opts){opts=opts||{};let dmg=raw,crit=opts.crit;
+function dealDamage(e,raw,opts){opts=opts||{};if(!e.alive||e.hp<=0)return;let dmg=raw,crit=opts.crit;
   if(e.shieldT>0)dmg*=0.4;if(e.armorT>0)dmg*=0.6;dmg=Math.round(dmg);
   e.hp-=dmg;e.hurt=opts.heavy?12:7;e.flinch=opts.heavy?14:6;
   const dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy)||1;const kb=(opts.heavy?0.55:0.28)*(e.def.boss?0.4:1);tryMoveEnemy(e,dx/d*kb,dy/d*kb);
@@ -2140,20 +2182,21 @@ function updateEnemies(){
   const D=derived();if(D.regen>0&&player.hp<player.maxhp){player.regenAcc+=D.regen/300;if(player.regenAcc>=1){player.hp=Math.min(player.maxhp,player.hp+1);player.regenAcc-=1;}}
 }
 /* ============ QUEST ============ */
-function onKill(e){game.xp+=e.xpScaled;quest.killed++;const D=derived();
+function onKill(e){if(e._counted)return;e._counted=true;game.xp+=e.xpScaled;quest.killed++;const D=derived();
   particleBurst(e.x,e.y,e.def.boss?40:18,e.def.shape==='ghost'||e.def.shape==='wisp'?'#bfe6ff':'#7a3528',e.def.boss?0.2:0.13,e.def.boss?50:34);
   particleBurst(e.x,e.y,e.def.boss?20:8,'#ffe6a0',0.1,30);
   addFloater(e.x,e.y,'+'+e.xpScaled+' XP','#ffe14a',e.def.boss);
   // harvest: chance to spawn a bonus pickup (scales with harvest stat)
   if(Math.random()<0.15+D.harvest/100){pickups.push({x:e.x,y:e.y,xp:Math.round(e.xpScaled*0.4),col:'#c8e88a',seed:Math.random()*6});}
   shake=Math.max(shake,e.def.boss?14:5);hitstop=Math.max(hitstop,e.def.boss?12:4);
-  showToast('Slain: '+e.def.name+'  +'+e.xpScaled+' XP','#b3a984');checkLevel();if(quest.killed>=quest.total)endQuest(true);}
+  showToast('Slain: '+e.def.name+'  +'+e.xpScaled+' XP','#b3a984');checkLevel();
+  if(quest.killed>=quest.total){winPending=e.def.boss?78:48;}}   // delay the rewards screen so the final death animation plays
 function checkLevel(){const need=game.level*120;if(game.xp>=need){game.xp-=need;game.level++;const D=derived();player.maxhp=D.maxhp;player.hp=player.maxhp;showToast('LEVEL UP — Lv '+game.level,'#e0b13c');}}
 function startQuest(){const sc=logScore();game.marchDays=(game.marchDays||0)+1;saveGame();const streak=streakCount()+game.marchDays;const t=tierFor(sc.pct,streak);const D=derived();
   curBiome=t.biome||'forest';
   buildForest(Math.min(48,10+t.idx*5));
   player.x=MAP_S/2;player.y=MAP_S/2;player.ang=0;player.combo=0;player.comboT=0;player.blocking=false;player.blockT=0;player.dodgeT=0;player.stamina=player.maxstam=100;player.regenAcc=0;player.burnT=0;player.burnTick=0;
-  attackHeld=false;attackHeldFrames=0;particles=[];floaters=[];thrown=[];pArrows=[];pickups=[];shake=0;hitstop=0;parryFlash=0;slashArc=0;player.bowCool=0;player.bowAnim=0;player.switchAnim=0;
+  attackHeld=false;attackHeldFrames=0;particles=[];floaters=[];thrown=[];pArrows=[];pickups=[];shake=0;hitstop=0;winPending=0;parryFlash=0;slashArc=0;swing=0;player.bowCool=0;player.bowAnim=0;player.fireAnim=0;player.switchAnim=0;player.dodgeDx=0;player.dodgeDy=0;
   if(!modeAvailable(weaponMode))weaponMode='melee';
   player.maxhp=D.maxhp;player.hp=player.maxhp;player.cool=0;
   enemies=[];projectiles=[];motes=[];for(let i=0;i<50;i++)motes.push({x:2+Math.random()*(MAP_S-4),y:2+Math.random()*(MAP_S-4),h:0.1+Math.random()*0.35,ph:Math.random()*6});
@@ -2168,7 +2211,7 @@ function startQuest(){const sc=logScore();game.marchDays=(game.marchDays||0)+1;s
     enemies.push({def,x:ex,y:ey,hp:Math.round(def.hp*sBuff),maxhp:Math.round(def.hp*sBuff),xpScaled:Math.round(def.xp*sBuff),alive:true,hurt:0,flinch:0,lunge:0,atkCool:30+Math.random()*30|0,castCool:60+Math.random()*40|0,healCool:120,windup:0,charging:false,chargeT:0,diving:false,diveT:0,shieldT:0,shieldCool:120,armorT:0,enraged:false,phase:Math.random()*6,seed:Math.random()*6});}
   quest={tier:t,total:count,killed:0,streak,boss:hasBoss,score:sc};
   hidePanels();document.getElementById('hud').classList.remove('hidden');running=true;document.getElementById('hotbar').dataset.built='';updateThrowUI();updateHUD();}
-function endQuest(won){running=false;document.getElementById('hud').classList.add('hidden');const D=derived();
+function endQuest(won){if(!running)return;running=false;winPending=0;document.getElementById('hud').classList.add('hidden');const D=derived();
   const title=document.getElementById('resTitle'),sub=document.getElementById('resSub'),box=document.getElementById('resLoot');box.innerHTML='';
   if(won){title.textContent=quest.boss?'👑 The Wyrm Falls':'Hunt Complete';title.className='r-'+(quest.boss?'legendary':'uncommon');
     const rolls=(quest.boss?3:1)+(quest.tier.idx>=3?1:0);box.innerHTML='<p class="sub">Spoils recovered:</p><div class="inv-grid" id="resGrid"></div>';
@@ -2212,6 +2255,15 @@ function loop(ts){frame++;
   _lastT=ts||_lastT;
   if(running){
     if(hitstop>0){hitstop--;drawScene();updateHUD();requestAnimationFrame(loop);return;}
+    if(winPending>0){winPending--;
+      // keep the world animating (death particles, last motes) but stop spawning/AI threats
+      updateEnemies();
+      for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vx*=0.9;p.vy*=0.9;p.life--;}particles=particles.filter(p=>p.life>0);
+      for(const ar of pArrows){ar.x+=ar.vx;ar.y+=ar.vy;ar.life--;}pArrows=pArrows.filter(a=>a.life>0);
+      if(swing>0)swing-=0.16;if(player.fireAnim>0)player.fireAnim--;if(player.bowAnim>0)player.bowAnim--;
+      drawScene();updateHUD();
+      if(winPending===0)endQuest(true);
+      requestAnimationFrame(loop);return;}
     if(attackHeld){attackHeldFrames++;if(attackHeldFrames>CHARGE_MAX+30)attackHeldFrames=CHARGE_MAX+30;}
     movePlayer();updateEnemies();if(player.cool>0)player.cool--;if(player.bowCool>0)player.bowCool--;if(player.bowAnim>0)player.bowAnim--;if(player.fireAnim>0)player.fireAnim--;if(player.switchAnim>0)player.switchAnim--;if(swing>0)swing-=0.16;
     // view bob
@@ -2238,7 +2290,7 @@ function drawOverlays(){
 }
 
 /* ============ INPUT ============ */
-let keys={},running=false,attackHeld=false,attackHeldFrames=0;
+let keys={},running=false,attackHeld=false,attackHeldFrames=0,winPending=0;
 const noTouch=matchMedia('(pointer:fine)').matches;if(noTouch)document.body.classList.add('no-touch');
 document.addEventListener('keydown',e=>{const k=e.key.toLowerCase();
   if((k==='control'||k==='c')&&running&&!keys['control']&&!keys['c'])dodge();
@@ -2316,7 +2368,26 @@ function updateHUD(){const need=game.level*120;
 let toastTimer;function showToast(t,c){const el=document.getElementById('toast');el.innerHTML='<span style="color:'+(c||'#fff')+'">'+t+'</span>';el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),1300);}
 
 /* ============ PANELS ============ */
-function hidePanels(){['welcome','charSelect','logPanel','resultPanel','invPanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));}
+function hidePanels(){['welcome','charSelect','logPanel','resultPanel','invPanel','controlsPanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));}
+function showControls(){hidePanels();document.getElementById('hud').classList.add('hidden');
+  const rows=[
+    ['Move','W A S D  /  Arrow keys','On touch: the left joystick'],
+    ['Look / Aim','Move the mouse (after clicking in)','On touch: drag the right side of the screen'],
+    ['Attack','Left-click  /  Spacebar','Hold to charge a heavier blow'],
+    ['Dodge roll','C  /  Ctrl','Brief invulnerability — time it against attacks'],
+    ['Switch weapon','F  /  mouse wheel','Cycle melee → ranged → throwables'],
+    ['Throw dagger','1',''],
+    ['Throw bomb','2',''],
+    ['Lock mouse / take control','Click the screen once when a hunt begins',''],
+    ['Release mouse','Esc',''],
+  ];
+  document.getElementById('controlsList').innerHTML=rows.map(r=>
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.06);">'
+    +'<span style="color:#d8cfa8;font-weight:bold;flex:0 0 auto;">'+r[0]+'</span>'
+    +'<span style="text-align:right;"><span style="color:var(--gold);">'+r[1]+'</span>'
+    +(r[2]?'<br><span class="tiny" style="color:#8a7f5f;">'+r[2]+'</span>':'')+'</span></div>'
+  ).join('');
+  document.getElementById('controlsPanel').classList.remove('hidden');}
 function showCharSelect(){hidePanels();document.getElementById('hud').classList.add('hidden');document.getElementById('charSelect').classList.remove('hidden');drawSkinPreview();}
 function showWelcome(){hidePanels();document.getElementById('hud').classList.add('hidden');
   document.getElementById('welLevel').textContent='Lv '+game.level;document.getElementById('welStreak').textContent=streakCount()+' days';document.getElementById('welLoot').textContent=game.loot.length;
@@ -2519,10 +2590,16 @@ function drawDoll(){const cv=document.getElementById('dollCanvas'),x=cv.getConte
       for(let k=0;k<8;k++){const a=k/8*6.283;x.beginPath();x.moveTo(bx+Math.cos(a)*p*0.8,by+Math.sin(a)*p*0.8);x.lineTo(bx+Math.cos(a)*p*1.7,by+Math.sin(a)*p*1.7);x.lineTo(bx+Math.cos(a+0.4)*p*0.8,by+Math.sin(a+0.4)*p*0.8);x.closePath();x.fill();}
       x.fillStyle=sh2(wc,sideShade);x.beginPath();x.arc(bx,by,p*1.1,0,7);x.fill();x.fillStyle=sh2(shade(wc,1.3),sideShade);x.beginPath();x.arc(bx-p*0.3,by-p*0.3,p*0.4,0,7);x.fill();}
     else if(wp.form==='longspear'){x.fillStyle='#5a4a30';x.fillRect(hx-p*0.2,topY-p*4,p*0.5,p*15);x.fillStyle=sh2(wc,sideShade);x.beginPath();x.moveTo(hx+p*0.15,topY-p*5.5);x.lineTo(hx+p*0.9,topY-p*3.5);x.lineTo(hx+p*0.15,topY-p*2.5);x.lineTo(hx-p*0.6,topY-p*3.5);x.closePath();x.fill();x.fillStyle='#9aa0aa';x.fillRect(hx-p*1.2,topY-p*2.6,p*2.6,p*0.5);}
-    else if(wp.form==='knives'){for(const s of [-1,1]){const kx=hx+s*p*1.1;x.save();x.translate(kx,topY+p*3);x.rotate(s*0.3);
-      x.strokeStyle=sh2('#7d8893',sideShade);x.lineWidth=p*0.3;x.beginPath();x.arc(0,p*0.5,p*0.7,-0.5,Math.PI+0.5);x.stroke();
-      x.fillStyle=sh2(wc,sideShade);x.beginPath();x.moveTo(0,p*0.5);x.quadraticCurveTo(-p*0.8,-p*1,-p*0.4,-p*3);x.quadraticCurveTo(0,-p*4,0,-p*4.5);x.quadraticCurveTo(0,-p*4,p*0.4,-p*3);x.quadraticCurveTo(p*0.8,-p*1,0,p*0.5);x.closePath();x.fill();
-      x.fillStyle=sh2(shade(wc,1.4),sideShade);x.fillRect(-p*0.08,-p*3.5,p*0.16,p*3);x.restore();}}
+    else if(wp.form==='knives'){const hx=cx+p*2.5;const handY=topY+p*8;   // the character's right hand
+      for(const off of [-0.45,0.45]){const kx=hx+off*p*0.7;
+        // grip sits IN the hand
+        x.fillStyle=sh2('#3a2d1d',sideShade);x.fillRect(kx-p*0.16,handY-p*0.3,p*0.32,p*1.1);
+        // small crossguard at the bottom of the grip
+        x.fillStyle=sh2('#7d8893',sideShade);x.fillRect(kx-p*0.36,handY+p*0.8,p*0.72,p*0.22);
+        // small leaf blade hanging DOWN from the hand
+        x.fillStyle=sh2(wc,sideShade);x.beginPath();x.moveTo(kx,handY+p*0.9);x.quadraticCurveTo(kx-p*0.38,handY+p*1.7,kx-p*0.2,handY+p*2.7);x.quadraticCurveTo(kx,handY+p*3.2,kx,handY+p*3.5);x.quadraticCurveTo(kx,handY+p*3.2,kx+p*0.2,handY+p*2.7);x.quadraticCurveTo(kx+p*0.38,handY+p*1.7,kx,handY+p*0.9);x.closePath();x.fill();
+        x.fillStyle=sh2(shade(wc,1.4),sideShade);x.fillRect(kx-p*0.05,handY+p*1.2,p*0.1,p*1.7);
+      }}
     else if(wp.form==='windstaff'){x.fillStyle='#5a4a30';x.fillRect(hx-p*0.2,topY-p*2,p*0.5,p*12);x.strokeStyle=sh2(wc,sideShade);x.lineWidth=p*0.4;x.beginPath();x.moveTo(hx-p*0.8,topY-p*2.5);x.quadraticCurveTo(hx-p*1.6,topY-p*4,hx-p*0.2,topY-p*4.5);x.moveTo(hx+p*0.8,topY-p*2.5);x.quadraticCurveTo(hx+p*1.6,topY-p*4,hx+p*0.2,topY-p*4.5);x.stroke();x.fillStyle='#9ae0ff';x.beginPath();x.arc(hx,topY-p*3.5,p*1.1,0,7);x.fill();x.fillStyle='#cfeeff';x.beginPath();x.arc(hx,topY-p*3.5,p*0.5,0,7);x.fill();}
     else{x.fillStyle=sh2(wc,sideShade);x.fillRect(hx-p*0.3,topY-p*1,p*0.8,p*7);x.fillStyle='#5a4a30';x.fillRect(hx-p*0.8,topY+p*5.5,p*1.8,p*0.8);}}
   // ---- equipped ranged weapon in the other hand ----
@@ -2552,13 +2629,42 @@ function drawDoll(){const cv=document.getElementById('dollCanvas'),x=cv.getConte
     else if(rng.form==='wizstaff'){x.fillStyle=sh2('#5a4a30',sideShade);x.fillRect(bx-p*0.3,topY-p*1,p*0.6,p*11);x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.5;for(const s of [-1,1]){x.beginPath();x.moveTo(bx,topY-p*1);x.lineTo(bx+s*p*1.2,topY-p*2);x.stroke();}x.fillStyle='#6ad0ff';x.beginPath();x.arc(bx,topY-p*1.5,p*1.4,0,7);x.fill();x.fillStyle='#bfeaff';x.beginPath();x.arc(bx,topY-p*1.5,p*0.7,0,7);x.fill();x.strokeStyle='#9ae0ff';x.lineWidth=p*0.2;for(let k=0;k<3;k++){const a=k*2.1+0.5;x.beginPath();x.moveTo(bx,topY-p*1.5);x.lineTo(bx+Math.cos(a)*p*2,topY-p*1.5+Math.sin(a)*p*2);x.stroke();}}
     else if(rng.form==='trinitybow'){x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.7;x.beginPath();x.moveTo(bx,topY+p*0.5);x.quadraticCurveTo(bx-facing*p*1.6,topY+p*4.5,bx,topY+p*8.5);x.stroke();x.strokeStyle=sh2('#e8e0c8',sideShade);x.lineWidth=p*0.2;x.beginPath();x.moveTo(bx,topY+p*0.5);x.lineTo(bx,topY+p*8.5);x.stroke();x.fillStyle=sh2('#dfe6ea',sideShade);for(const dy of [-1.5,0,1.5]){x.fillRect(bx-facing*p*2.5,topY+p*4.5+dy*p-p*0.1,p*2.5,p*0.3);}}
     else{x.strokeStyle=sh2(rc,sideShade);x.lineWidth=p*0.7;x.beginPath();x.moveTo(bx,topY+p*0.5);x.quadraticCurveTo(bx-facing*p*1.6,topY+p*4.5,bx,topY+p*8.5);x.stroke();x.strokeStyle=sh2('#e8e0c8',sideShade);x.lineWidth=p*0.2;x.beginPath();x.moveTo(bx,topY+p*0.5);x.lineTo(bx,topY+p*8.5);x.stroke();}}
-  // ---- equipped trinket charm ----
-  if(tr){const tc=tr.c;x.fillStyle=sh2(tc,sideShade*1.2);x.beginPath();x.arc(cx-facing*p*2.2,topY+p*5,p*0.8,0,7);x.fill();}
+  // ---- equipped trinket: worn as a NECKLACE (fang/charm) or BELT (sigil) ----
+  if(tr){const tc=tr.c;const necklace=(tr.form==='fang'||tr.form==='charm');
+    if(necklace){
+      // a V-chain from the collar down to a point on the chest, pendant hanging at the V
+      const lx=cx-p*1.3, rx=cx+p*1.3, topYn=topY+p*3.2;   // chain anchors at the collar
+      const vY=topY+p*5.2;                                  // bottom of the V on the chest
+      x.strokeStyle=sh2('#d8c870',sideShade);x.lineWidth=Math.max(1.4,p*0.28);x.lineCap='round';
+      x.beginPath();x.moveTo(lx,topYn);x.lineTo(cx,vY);x.lineTo(rx,topYn);x.stroke();
+      // connecting ring at the V
+      x.fillStyle=sh2('#e8d880',sideShade);x.beginPath();x.arc(cx,vY,p*0.26,0,7);x.fill();
+      // pendant hangs directly below the ring
+      if(tr.form==='fang'){
+        x.fillStyle=sh2(tc,sideShade);x.beginPath();x.moveTo(cx-p*0.4,vY+p*0.2);x.lineTo(cx+p*0.4,vY+p*0.2);x.lineTo(cx,vY+p*1.7);x.closePath();x.fill();
+        x.fillStyle=sh2(shade(tc,1.4),sideShade);x.fillRect(cx-p*0.07,vY+p*0.3,p*0.14,p*1.2);
+      } else {
+        x.fillStyle=sh2(shade(tc,0.7),sideShade);x.beginPath();x.arc(cx,vY+p*0.95,p*0.62,0,7);x.fill();
+        x.fillStyle=sh2(tc,sideShade);x.beginPath();x.arc(cx,vY+p*0.95,p*0.42,0,7);x.fill();
+        x.fillStyle=sh2(shade(tc,1.5),sideShade);x.beginPath();x.arc(cx-p*0.14,vY+p*0.78,p*0.16,0,7);x.fill();
+      }
+    } else {
+      // a slim belt with a small buckle across the waist
+      const beltY=topY+p*7.7;
+      x.fillStyle=sh2('#3a2d1d',sideShade);x.fillRect(cx-p*2.4,beltY,p*4.8,p*0.5);   // thinner strap
+      // small buckle
+      x.fillStyle=sh2(shade(tc,0.7),sideShade);x.fillRect(cx-p*0.7,beltY-p*0.2,p*1.4,p*0.9);
+      x.fillStyle=sh2(tc,sideShade);x.fillRect(cx-p*0.5,beltY-p*0.05,p*1.0,p*0.6);
+      x.fillStyle=sh2(shade(tc,1.5),sideShade);x.fillRect(cx-p*0.35,beltY+p*0.05,p*0.35,p*0.35);
+    }
+  }
   document.getElementById('dollTitle').textContent=sk.name;}
 
 /* buttons */
 document.getElementById('toLogBtn').onclick=showLog;
 document.getElementById('welInvBtn').onclick=showInv;
+document.getElementById('welControlsBtn').onclick=showControls;
+document.getElementById('controlsBackBtn').onclick=showWelcome;
 document.getElementById('backWelBtn').onclick=showWelcome;
 document.getElementById('marchBtn').onclick=startQuest;
 document.getElementById('resBackBtn').onclick=showWelcome;
